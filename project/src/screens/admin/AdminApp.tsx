@@ -4,7 +4,7 @@ import {
   LayoutDashboard, TrendingUp, Users, ShoppingBag, Coffee, Megaphone, Gift,
   Bell, Tag, MapPin, UserCog, BarChart3, LogOut, Menu as MenuIcon, X,
   ArrowLeft, ScanLine, Store,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 

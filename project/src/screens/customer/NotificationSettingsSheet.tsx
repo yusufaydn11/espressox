@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
-import { Bell, BellOff, Megaphone, Gift, ShoppingBag, Star, Info } from 'lucide-react';
+import { Bell, BellOff, Megaphone, Gift, ShoppingBag, Star, Info } from 'lucide-react-native';
 import { Sheet } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
 import { Toggle } from '@/components/ui/Modal';

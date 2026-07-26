@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Plus, Tag, Copy, Check, Calendar, Percent, Gift, Edit2, Trash2, TrendingUp } from 'lucide-react';
+import { Plus, Tag, Copy, Check, Calendar, Percent, Gift, Edit2, Trash2, TrendingUp } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select } from '@/components/ui/Modal';

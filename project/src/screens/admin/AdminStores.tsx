@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2, Phone, MessageCircle } from 'lucide-react';
+import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2, Phone, MessageCircle } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select, Toggle } from '@/components/ui/Modal';

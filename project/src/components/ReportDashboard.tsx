@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import {
   Coffee, Gift, Award, TrendingUp, TrendingDown, Users, AlertTriangle, Clock, Activity, Calendar, Store as StoreIcon, Crown, ChevronDown,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';

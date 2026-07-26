@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Image, ScrollView } from 'react-native';
-import { Gift, Crown, Zap, Trophy, Users, TrendingUp, Star, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Gift, Crown, Zap, Trophy, Users, TrendingUp, Star, Plus, Edit2, Trash2 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select } from '@/components/ui/Modal';

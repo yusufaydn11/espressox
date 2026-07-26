@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { View, Text, TextInput as RNTextInput, ScrollView, FlatList } from 'react-native';
-import { Search } from 'lucide-react';
+import { Search } from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { useProducts } from '@/lib/hooks';
 import { ProductCard } from '@/components/ProductCard';

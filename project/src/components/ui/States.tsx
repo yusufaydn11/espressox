@@ -1,5 +1,5 @@
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
-import { RefreshCw, AlertCircle, Inbox, type LucideIcon } from 'lucide-react';
+import { RefreshCw, AlertCircle, Inbox, type LucideIcon } from 'lucide-react-native';
 
 export function LoadingState({ label = 'Yükleniyor…' }: { label?: string }) {
   return (

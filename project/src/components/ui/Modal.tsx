@@ -1,6 +1,6 @@
 import { View, Text, Pressable, Modal as RNModal } from 'react-native';
 import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { X } from 'lucide-react-native';
 import { cn } from '@/lib/utils';
 
 interface ModalProps {

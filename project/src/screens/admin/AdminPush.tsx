@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Bell, Mail, MessageSquare, Send, Users, Sparkles, Loader2 } from 'lucide-react';
+import { Bell, Mail, MessageSquare, Send, Users, Sparkles, Loader2 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { TextInput, TextArea } from '@/components/ui/Modal';

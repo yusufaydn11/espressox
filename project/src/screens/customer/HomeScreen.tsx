@@ -1,5 +1,5 @@
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { Coffee, Crown, Gift, MapPin, ChevronRight, Flame, Sparkles, QrCode as QrIcon } from 'lucide-react';
+import { Coffee, Crown, Gift, MapPin, ChevronRight, Flame, Sparkles, QrCode as QrIcon } from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useStores, useProducts } from '@/lib/hooks';

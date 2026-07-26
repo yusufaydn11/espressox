@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { Crown, Zap, Gift, ChevronRight, Star } from 'lucide-react';
+import { Crown, Zap, Gift, ChevronRight, Star } from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { TIERS } from '@/data';

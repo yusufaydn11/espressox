@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
-import { Copy, Check, Tag, Gift, Users, Clock, Wallet, MapPin, Share2 } from 'lucide-react';
+import { Copy, Check, Tag, Gift, Users, Clock, Wallet, MapPin, Share2 } from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';

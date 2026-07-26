@@ -4,7 +4,7 @@ import {
   Heart, Receipt, CreditCard, MapPin, FileText, Crown, Zap,
   Bell, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
   UserX,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';

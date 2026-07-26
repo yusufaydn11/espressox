@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native';
 import { useApp } from '@/context/AppContext';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react-native';
 
 export function Toast() {
   const { toast } = useApp();

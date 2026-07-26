@@ -1,4 +1,4 @@
-import { Crown, Maximize2, Gift, Coffee } from 'lucide-react';
+import { Crown, Maximize2, Gift, Coffee } from 'lucide-react-native';
 import { useState, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';

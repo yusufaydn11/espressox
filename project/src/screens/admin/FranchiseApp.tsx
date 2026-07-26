@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
   LayoutDashboard, ShoppingBag, ScanLine, BarChart3, Bell,
   LogOut, Menu as MenuIcon, X, ArrowLeft, Coffee, Store,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 import { supabase } from '@/lib/supabase';

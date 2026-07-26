@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import * as Linking from 'expo-linking';
-import { Coffee, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Coffee, CheckCircle2, ArrowLeft } from 'lucide-react-native';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { AdminProvider, useAdmin } from '@/context/AdminContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
