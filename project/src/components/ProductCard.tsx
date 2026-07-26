@@ -1,5 +1,5 @@
 import { View, Text, Pressable, Image } from 'react-native';
-import { Heart, Plus, Sparkles } from 'lucide-react';
+import { Heart, Plus, Sparkles } from 'lucide-react-native';
 import type { Product } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';

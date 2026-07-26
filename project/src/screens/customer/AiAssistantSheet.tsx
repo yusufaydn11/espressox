@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, Pressable, TextInput as RNTextInput, ScrollView } from 'react-native';
-import { Sparkles, Send, Coffee, Cake, TrendingUp, Lightbulb } from 'lucide-react';
+import { Sparkles, Send, Coffee, Cake, TrendingUp, Lightbulb } from 'lucide-react-native';
 import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { AI_CHAT, AI_SUGGESTIONS } from '@/data';

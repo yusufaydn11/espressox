@@ -1,5 +1,5 @@
 import { View, Text, ScrollView } from 'react-native';
-import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUpRight, Coffee, Crown, Zap } from 'lucide-react';
+import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUpRight, Coffee, Crown, Zap } from 'lucide-react-native';
 import { StatCard, BarChart, LineChart, DonutChart } from '@/components/ui/Charts';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
