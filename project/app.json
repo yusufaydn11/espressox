@@ -11,9 +11,7 @@
       "resizeMode": "cover",
       "backgroundColor": "#FAF9F6"
     },
-    "newArchEnabled": false,
     "ios": {
-      "supportsTablet": true,
       "bundleIdentifier": "com.espressox.app",
       "buildNumber": "1",
       "infoPlist": {
