@@ -10,22 +10,25 @@ import { computeCartPoints } from '@shared/utils/loyalty';
 import { normalizeToast, type ToastMessage } from '@shared/types/toast';
 
 type Theme = 'light' | 'dark';
-type Role = 'customer' | 'admin';
 export type Tab = 'home' | 'menu' | 'qr' | 'campaigns' | 'profile';
-type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'notification-inbox' | 'account' | 'qr' | 'rewards' | 'orders' | 'reset-password' | null;
+type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'notification-inbox' | 'account' | 'qr' | 'rewards' | 'orders' | 'reset-password' | 'addresses' | null;
 
 export type LastOrder = {
   orderNumber: string;
   storeName: string;
   status: string;
   pointsEarned: number;
+  total?: number;
+  billingType?: string;
+  benefitTitle?: string | null;
 };
 
 interface AppState {
   theme: Theme;
   toggleTheme: () => void;
-  role: Role;
-  setRole: (r: Role) => void;
+  /** Admin/franchise kullanıcı müşteri uygulamasını önizler */
+  previewAsCustomer: boolean;
+  setPreviewAsCustomer: (v: boolean) => void;
   tab: Tab;
   setTab: (t: Tab) => void;
 
@@ -57,6 +60,9 @@ interface AppState {
 
   lastOrder: LastOrder | null;
   setLastOrder: (order: LastOrder | null) => void;
+
+  selectedOrderNumber: string | null;
+  setSelectedOrderNumber: (n: string | null) => void;
 }
 
 export interface Customization {
@@ -73,9 +79,13 @@ export interface Customization {
 const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, user } = useAuth();
   const [theme, setTheme] = useState<Theme>('light');
-  const [role, setRole] = useState<Role>('customer');
+  const [previewAsCustomer, setPreviewAsCustomer] = useState(false);
+
+  useEffect(() => {
+    if (!user) setPreviewAsCustomer(false);
+  }, [user]);
   const [tab, setTab] = useState<Tab>('home');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [sheet, setSheet] = useState<SheetView>(null);
@@ -83,6 +93,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
+  const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(null);
   const [earnRate, setEarnRate] = useState(DEFAULT_EARN_RATE);
 
   const points = profile?.points ?? 0;
@@ -112,7 +123,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (opts.syrup?.priceModifier ?? 0) +
       (opts.topping?.priceModifier ?? 0) +
       opts.temperature.priceModifier +
-      opts.extraEspresso * 0.8;
+      opts.extraEspresso * 12;
     const id = `${product.id}-${Date.now()}`;
     const item: CartItem = { id, product, ...opts, quantity: 1, unitPrice };
     setCart(c => [...c, item]);
@@ -164,7 +175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [profile, refreshProfile]);
 
   const value: AppState = {
-    theme, toggleTheme, role, setRole, tab, setTab,
+    theme, toggleTheme, previewAsCustomer, setPreviewAsCustomer, tab, setTab,
     cart, addToCart, removeFromCart, updateQty, clearCart,
     cartCount, cartTotal, cartPoints,
     sheet, openSheet, closeSheet,
@@ -173,6 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     points, addPoints, spendPoints,
     toast, showToast,
     lastOrder, setLastOrder,
+    selectedOrderNumber, setSelectedOrderNumber,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

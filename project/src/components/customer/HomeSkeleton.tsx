@@ -7,22 +7,25 @@ function Bone({ className }: { className?: string }) {
 
 export function HomeSkeleton() {
   return (
-    <View className="mx-auto max-w-md pb-32 w-full px-5 pt-5 gap-5">
+    <View className="pt-2 pb-10 gap-6">
       <View className="gap-2">
         <Bone className="h-4 w-24" />
-        <Bone className="h-9 w-48" />
+        <Bone className="h-10 w-48" />
       </View>
-      <Bone className="h-44 w-full rounded-3xl" />
-      <View className="flex-row gap-3">
-        <Bone className="h-28 flex-1 rounded-2xl" />
-        <Bone className="h-28 flex-1 rounded-2xl" />
+      <View className="flex-row gap-5">
+        <Bone className="h-52 flex-1 rounded-[1.25rem]" />
+        <View className="gap-3 w-48">
+          <Bone className="h-20 rounded-2xl" />
+          <Bone className="h-20 rounded-2xl" />
+          <Bone className="h-20 rounded-2xl" />
+        </View>
       </View>
       <Bone className="h-16 w-full rounded-2xl" />
-      <View className="gap-3 mt-2">
+      <View className="gap-3">
         <Bone className="h-6 w-32" />
-        <View className="flex-row gap-3">
-          <Bone className="h-44 w-40 rounded-3xl" />
-          <Bone className="h-44 w-40 rounded-3xl" />
+        <View className="flex-row gap-4">
+          <Bone className="h-44 w-40 rounded-[1.25rem]" />
+          <Bone className="h-44 w-40 rounded-[1.25rem]" />
         </View>
       </View>
     </View>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput as RNTextInput } from 'react-native';
 import { Search, Users, Crown, TrendingDown, Cake, Star, Edit2, Trash2, Download, Ban, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select } from '@/components/ui/Modal';
 import { useAdmin, type AdminCustomer } from '@/context/AdminContext';
 import { cn, tierColor } from '@/lib/utils';
@@ -155,10 +155,10 @@ export function AdminCustomers() {
               <View className="flex-1"><FormField label="Toplam sipariş"><TextInput value={String(form.orders)} onChangeText={v => setForm({ ...form, orders: Number(v) || 0 })} keyboardType="numeric" /></FormField></View>
               <View className="flex-1"><FormField label="Harcama (₺)"><TextInput value={String(form.spent)} onChangeText={v => setForm({ ...form, spent: Number(v) || 0 })} keyboardType="numeric" /></FormField></View>
             </View>
-            <View className="flex-row gap-3 pt-2">
-              <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-              <Button variant="gold" full onPress={save}>Kaydet</Button>
-            </View>
+            <ButtonRow className="pt-2">
+              <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+              <Button variant="gold" flex onPress={save}>Kaydet</Button>
+            </ButtonRow>
           </View>
         )}
       </Modal>

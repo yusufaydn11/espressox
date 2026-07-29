@@ -1,4 +1,4 @@
-import { Pressable, type PressableProps } from 'react-native';
+import { Pressable, View, type PressableProps } from 'react-native';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { buttonClasses, type ButtonClassVariant } from '@shared/design/classNames';
@@ -10,7 +10,10 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   variant?: Variant;
   size?: Size;
   children: ReactNode;
+  /** Full width in a column layout */
   full?: boolean;
+  /** Equal flex share inside ButtonRow */
+  flex?: boolean;
   className?: string;
 }
 
@@ -24,6 +27,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   full,
+  flex,
   className,
   children,
   ...props
@@ -31,15 +35,25 @@ export function Button({
   return (
     <Pressable
       className={cn(
-        'flex flex-row items-center justify-center font-medium active:opacity-90 disabled:opacity-40',
+        'flex-row items-center justify-center font-medium active:opacity-90 disabled:opacity-40 shrink-0',
         buttonClasses[variant],
         sizes[size],
-        full && 'w-full',
+        flex && 'flex-1 min-w-0',
+        full && !flex && 'w-full self-stretch',
         className,
       )}
       {...props}
     >
       {children}
     </Pressable>
+  );
+}
+
+/** Horizontal button group — use flex on child buttons, not full */
+export function ButtonRow({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <View className={cn('flex-row items-stretch gap-3', className)}>
+      {children}
+    </View>
   );
 }

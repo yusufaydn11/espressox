@@ -21,3 +21,10 @@ export {
 } from './loyaltyService';
 
 export type { QrScanRpcResult } from './loyaltyService';
+export {
+  fetchFreeCoffeeRedemptions,
+  fetchOperationContextForUser,
+  fetchDailyBenefitStats,
+  fetchStoreOperationSnapshot,
+} from './operationDataService';
+export type { FreeCoffeeRedemptionRow, OperationContext } from './operationDataService';

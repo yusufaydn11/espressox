@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Plus, Megaphone, Mail, MessageSquare, Cake, MapPin, Edit2, Trash2, TrendingUp, Users, DollarSign } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/Charts';
 import { useAdmin, genId, type CampaignRow } from '@/context/AdminContext';
@@ -119,10 +119,10 @@ export function AdminCampaigns() {
             <View className="flex-1"><FormField label="Ciro (₺)"><TextInput value={String(form.revenue)} onChangeText={v => set('revenue', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
           </View>
           <FormField label="Başlangıç"><TextInput value={form.start ?? ''} onChangeText={v => set('start', v)} placeholder="Örn. 1 Eki" /></FormField>
-          <View className="flex-row gap-3 pt-2">
-            <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" full onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
-          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
+          </ButtonRow>
         </View>
       </Modal>
 

@@ -171,6 +171,30 @@ export async function spendPoints(
 export async function lookupQrByCode(
   code: string,
 ): Promise<{ data: QrCodeRow | null; error: string | null }> {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('lookup_qr_for_scan', {
+    p_code: code,
+  });
+
+  if (!rpcError && rpcData && typeof rpcData === 'object') {
+    const payload = rpcData as { error?: string | null; id?: string; user_id?: string; code?: string };
+    if (payload.error) {
+      return { data: null, error: payload.error };
+    }
+    if (payload.id && payload.user_id && payload.code) {
+      return {
+        data: {
+          id: payload.id,
+          user_id: payload.user_id,
+          code: payload.code,
+          is_active: true,
+          created_at: '',
+        } as QrCodeRow,
+        error: null,
+      };
+    }
+  }
+
+  // Fallback if RPC not deployed yet
   const { data, error } = await supabase
     .from('qr_codes')
     .select('*')
@@ -185,6 +209,9 @@ export type QrScanRpcResult = {
   error: string | null;
   points_awarded?: number;
   customer_id?: string;
+  redeemed?: boolean;
+  stamps_redeemed?: number;
+  remaining_stamps?: number;
 };
 
 export async function scanQrStamp(

@@ -8,7 +8,10 @@ import {
   CustomerDetailHeader,
   LoyaltySummaryPanel,
   OrderHistoryPanel,
+  LoyaltyHistoryPanel,
+  CampaignActivityPanel,
 } from '../../components/crm';
+import { useCustomerLoyaltyDetail } from '../../hooks/useCustomerLoyaltyDetail';
 
 const HQ_CRM_ROLES = new Set(['super_admin', 'admin']);
 
@@ -17,6 +20,7 @@ export function CustomerDetailScreen() {
   const navigate = useNavigate();
   const { primaryRole, rolesLoaded, loading: authLoading } = useAuth();
   const { customer, orders, loading, error, reload } = useCustomerDetail(userId);
+  const loyalty = useCustomerLoyaltyDetail(userId);
 
   if (authLoading || !rolesLoaded) return <Spinner label="Yetkiler doğrulanıyor…" />;
   if (!primaryRole || !HQ_CRM_ROLES.has(primaryRole)) {
@@ -30,7 +34,7 @@ export function CustomerDetailScreen() {
   return (
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       <Button variant="ghost" size="sm" onClick={() => navigate('/crm')}>
-        <ArrowLeft size={16} className="mr-1.5 inline" />
+        <ArrowLeft size={16} className="inline" />
         CRM'ye Dön
       </Button>
 
@@ -39,6 +43,16 @@ export function CustomerDetailScreen() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <LoyaltySummaryPanel customer={customer} />
         <OrderHistoryPanel orders={orders} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <LoyaltyHistoryPanel
+          items={loyalty.timeline}
+          loading={loyalty.loading}
+          error={loyalty.error}
+          onRetry={loyalty.reload}
+        />
+        <CampaignActivityPanel items={loyalty.timeline} />
       </div>
     </div>
   );

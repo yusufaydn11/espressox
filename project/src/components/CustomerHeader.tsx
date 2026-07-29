@@ -1,43 +1,50 @@
 import { View, Text, Pressable } from 'react-native';
-import { Bell } from 'lucide-react';
+import { ChevronLeft, Bell } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/lib/hooks';
-import { Crown } from 'lucide-react';
+import { colors } from '@shared/design/tokens';
 
-export function CustomerHeader() {
-  const { points, openSheet } = useApp();
-  const { profile } = useAuth();
+const TAB_TITLES: Record<string, string> = {
+  menu: 'Menü',
+  qr: 'QR Kartım',
+  campaigns: 'Kampanyalar',
+  profile: 'Profil',
+};
+
+interface CustomerHeaderProps {
+  tab: string;
+}
+
+export function CustomerHeader({ tab }: CustomerHeaderProps) {
+  const { setTab, openSheet } = useApp();
   const { data: notifications } = useNotifications();
-
   const unread = (notifications ?? []).filter(n => !n.is_read).length;
+  const title = TAB_TITLES[tab];
+
+  if (!title) return null;
 
   return (
-    <View className="px-5 pt-14 pb-2.5 flex-row items-center gap-2.5 bg-cream-50/90 border-b border-ink-100">
-      <View className="h-9 w-9 rounded-xl bg-ex-red items-center justify-center shadow-red">
-        <Text className="text-base font-extrabold text-white leading-none">X</Text>
-      </View>
-      <View className="flex-1">
-        <Text className="text-sm font-bold text-ink-900 leading-none">Espresso X</Text>
-        <View className="flex-row items-center gap-1 mt-1">
-          <Crown size={9} color="#C8102E" />
-          <Text className="text-[10px] text-ink-400 leading-none">
-            {profile?.tier ?? 'Bronz'} · {points.toLocaleString('tr-TR')} puan
-          </Text>
+    <View className="bg-cream-50">
+      <View className="px-5 pt-14 pb-3 flex-row items-center justify-between">
+        <View className="flex-row items-center gap-3 flex-1">
+          <Pressable
+            onPress={() => setTab('home')}
+            className="h-9 w-9 rounded-full bg-white shadow-soft items-center justify-center active:scale-95"
+          >
+            <ChevronLeft size={20} color={colors.ink[600]} />
+          </Pressable>
+          <Text className="text-xl font-bold text-ink-900 font-display">{title}</Text>
         </View>
+        <Pressable
+          onPress={() => openSheet('notification-inbox')}
+          className="relative h-9 w-9 rounded-full bg-white shadow-soft items-center justify-center active:scale-95"
+        >
+          <Bell size={17} color={colors.ink[500]} />
+          {unread > 0 && (
+            <View className="absolute top-0 right-0 h-2 w-2 rounded-full bg-ex-red border border-white" />
+          )}
+        </Pressable>
       </View>
-      <Pressable
-        onPress={() => openSheet('notification-inbox')}
-        className="relative h-10 w-10 rounded-xl bg-white border border-ink-100 items-center justify-center active:bg-cream-100"
-        accessibilityLabel="Bildirim merkezi"
-      >
-        <Bell size={18} color="#525258" />
-        {unread > 0 && (
-          <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-ex-red items-center justify-center border-2 border-cream-50">
-            <Text className="text-[9px] font-bold text-white">{unread > 9 ? '9+' : unread}</Text>
-          </View>
-        )}
-      </Pressable>
     </View>
   );
 }

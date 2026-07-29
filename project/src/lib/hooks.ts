@@ -20,6 +20,7 @@ import {
   fetchActiveProducts,
 } from '@/services/products';
 import { useAuth } from '@/context/AuthContext';
+import { filterVisibleCampaigns } from '@shared/utils/campaigns';
 
 export function useAsync<T>(fn: () => Promise<{ data: T | null; error: string | null }>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
@@ -93,7 +94,7 @@ export function useRewardRedemptions() {
 }
 
 export function useCampaigns() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
     const { data, error } = await supabase
@@ -102,8 +103,11 @@ export function useCampaigns() {
       .eq('status', 'active')
       .order('created_at', { ascending: false });
     if (error) return { data: null, error: error.message };
-    return { data: data as CampaignRow[], error: null };
-  }, [user?.id]);
+    const rows = filterVisibleCampaigns(data as CampaignRow[], {
+      storeId: profile?.favorite_store_id ?? null,
+    });
+    return { data: rows, error: null };
+  }, [user?.id, profile?.favorite_store_id]);
 }
 
 export function useNotifications() {
@@ -147,6 +151,10 @@ export function useCreateOrder() {
     storeId?: string;
     storeName: string;
     orderType: string;
+    paymentMethod?: string;
+    couponCode?: string | null;
+    benefitType?: string | null;
+    benefitId?: string | null;
   }) => {
     if (!user) return { error: 'Giriş yapmalısınız' };
 
@@ -161,6 +169,10 @@ export function useCreateOrder() {
       storeId: params.storeId ?? null,
       storeName: params.storeName,
       orderType: params.orderType,
+      paymentMethod: params.paymentMethod,
+      couponCode: params.couponCode,
+      benefitType: params.benefitType,
+      benefitId: params.benefitId,
     });
 
     if (result.error) return { error: result.error };
@@ -170,6 +182,10 @@ export function useCreateOrder() {
       error: null,
       orderNumber: result.orderNumber,
       pointsEarned: result.pointsEarned ?? 0,
+      total: result.total,
+      billingType: result.billingType,
+      benefitTitle: result.benefitTitle,
+      paymentStatus: result.paymentStatus,
     };
   }, [user, refreshProfile]);
 }

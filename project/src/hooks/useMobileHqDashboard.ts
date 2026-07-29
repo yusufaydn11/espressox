@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 export type MobileHqKpis = {
   todaySales: number;
@@ -57,11 +58,18 @@ function buildSalesBuckets(rows: { created_at: string; total: number }[], days: 
 }
 
 export function useMobileHqDashboard() {
+  const { role } = useAuth();
   const [data, setData] = useState<MobileHqDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (role !== 'super_admin' && role !== 'admin') {
+      setData(null);
+      setError('Bu ekran yalnızca merkez yöneticileri içindir.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -88,7 +96,7 @@ export function useMobileHqDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [role]);
 
   useEffect(() => { void load(); }, [load]);
 

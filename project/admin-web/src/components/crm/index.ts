@@ -7,3 +7,4 @@ export { CustomerListTable } from './CustomerListTable';
 export { CustomerDetailHeader } from './CustomerDetailHeader';
 export { LoyaltySummaryPanel } from './LoyaltySummaryPanel';
 export { OrderHistoryPanel } from './OrderHistoryPanel';
+export { LoyaltyHistoryPanel, CampaignActivityPanel } from './LoyaltyHistoryPanel';

@@ -32,6 +32,7 @@ type ScanResult = {
   customerName?: string;
   newPoints?: number;
   newStampCount?: number;
+  redeemed?: boolean;
 };
 
 export function AdminScanner() {
@@ -58,13 +59,23 @@ export function AdminScanner() {
     if (stores.length > 0 && !storeId) setStoreId(stores[0].id);
   }, [stores, storeId, authStoreId]);
 
-  const processCode = useCallback(async (rawCode: string) => {
-    const code = rawCode.trim().toUpperCase();
-    if (!code) return;
+  const processCode = useCallback(async (rawCode: string): Promise<boolean> => {
+    const code = normalizeQrCode(rawCode);
+    if (!code) return false;
     if (!code.startsWith('EX-')) {
-      setResult({ ok: false, title: 'Geçersiz kod', message: 'Bu bir Espresso X QR kodu değil.' });
+      setResult({ ok: false, title: 'Geçersiz kod', message: 'Bu bir Espresso X QR kodu değil. EX- ile başlamalı.' });
       setStatus('error');
-      return;
+      return false;
+    }
+
+    if (!effectiveStoreId?.trim()) {
+      setResult({
+        ok: false,
+        title: 'Şube seçin',
+        message: 'Damga eklemek için önce bir mağaza seçmelisiniz.',
+      });
+      setStatus('error');
+      return false;
     }
 
     setStatus('processing');
@@ -73,18 +84,21 @@ export function AdminScanner() {
     try {
       const { data: qrRow, error: qrErr } = await lookupQrByCode(code);
 
-      if (qrErr) throw new Error(qrErr);
+      if (qrErr) {
+        const msg = SCAN_ERROR_LABELS[qrErr] ?? qrErr;
+        throw new Error(msg);
+      }
       if (!qrRow) {
         const r: ScanResult = { ok: false, title: 'Kod bulunamadı', message: 'Bu QR kodu kayıtlı değil veya pasif.' };
         setResult(r);
         setStatus('error');
         setRecent(prev => [{ name: 'Bilinmiyor', points: 0, time: now(), ok: false }, ...prev].slice(0, 6));
-        return;
+        return false;
       }
 
       const qr = qrRow;
 
-      const { data: rpc, error: rpcErr } = await scanQrStamp(qr.id, effectiveStoreId || null);
+      const { data: rpc, error: rpcErr } = await scanQrStamp(qr.id, effectiveStoreId.trim());
       if (rpcErr) throw new Error(rpcErr);
       if (!rpc) throw new Error('Tarama yanıtı alınamadı');
 
@@ -93,44 +107,63 @@ export function AdminScanner() {
         setResult({ ok: false, title: 'Tarama başarısız', message: msg });
         setStatus('error');
         setRecent(prev => [{ name: 'Hata', points: 0, time: now(), ok: false }, ...prev].slice(0, 6));
-        return;
+        return false;
       }
 
       const customerId = rpc.customer_id ?? qr.user_id;
       const { data: profile } = await fetchProfileByUserId(customerId);
 
-      const { count: stampCount } = await countActiveStamps(customerId);
+      const stampCount = rpc.remaining_stamps ?? (await countActiveStamps(customerId)).count ?? 0;
 
-      const earnedReward = stampCount !== null && stampCount >= STAMPS_TO_REWARD;
+      if (rpc.redeemed) {
+        const r: ScanResult = {
+          ok: true,
+          redeemed: true,
+          title: 'Ödül kullanıldı!',
+          message: `Ücretsiz kahve verildi. Damga kartı sıfırlandı (${rpc.stamps_redeemed ?? STAMPS_TO_REWARD} damga).`,
+          customerName: profile?.full_name || 'Müşteri',
+          newPoints: profile?.points,
+          newStampCount: stampCount,
+        };
+        setResult(r);
+        setStatus('success');
+        setRecent(prev => [{ name: profile?.full_name || 'Müşteri', points: 0, time: now(), ok: true }, ...prev].slice(0, 6));
+        showToast('Ücretsiz kahve ödülü kullanıldı');
+        return true;
+      }
+
       const pointsAwarded = rpc.points_awarded ?? POINTS_PER_STAMP;
+      const earnedReward = stampCount >= STAMPS_TO_REWARD;
 
       const r: ScanResult = {
         ok: true,
         title: 'Damga eklendi!',
         message: earnedReward
-          ? `${STAMPS_TO_REWARD} damga tamamlandı! Ödül talep edebilir.`
-          : `${stampCount ?? 0} / ${STAMPS_TO_REWARD} damga`,
+          ? `${STAMPS_TO_REWARD} damga tamamlandı! Ödül için tekrar QR okutun.`
+          : `${stampCount} / ${STAMPS_TO_REWARD} damga`,
         customerName: profile?.full_name || 'Müşteri',
         newPoints: profile?.points,
-        newStampCount: stampCount ?? 0,
+        newStampCount: stampCount,
       };
       setResult(r);
       setStatus('success');
       setRecent(prev => [{ name: profile?.full_name || 'Müşteri', points: pointsAwarded, time: now(), ok: true }, ...prev].slice(0, 6));
-      showToast('Damga ve puan eklendi');
+      showToast(earnedReward ? '5 damga tamam! Ödül için tekrar okutun' : 'Damga ve puan eklendi');
+      return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Bilinmeyen hata';
       setResult({ ok: false, title: 'Hata', message: msg });
       setStatus('error');
       showToast('Hata: ' + msg);
+      return false;
     }
   }, [effectiveStoreId, showToast]);
 
-  const handleManualSubmit = useCallback(() => {
-    if (!manualCode.trim()) return;
-    void processCode(manualCode);
-    setManualCode('');
-  }, [manualCode, processCode]);
+  const handleManualSubmit = useCallback(async () => {
+    if (!manualCode.trim() || status === 'processing') return;
+    const ok = await processCode(manualCode);
+    if (ok) setManualCode('');
+  }, [manualCode, processCode, status]);
 
   const reset = useCallback(() => {
     setResult(null);
@@ -139,21 +172,22 @@ export function AdminScanner() {
 
   const storeOptions = authStoreId
     ? stores.filter(s => s.id === authStoreId).map(s => ({ label: s.name, value: s.id }))
-    : [
-        ...(stores.length === 0 ? [{ label: 'Genel', value: '' }] : []),
-        ...stores.map(s => ({ label: s.name, value: s.id })),
-      ];
+    : stores.map(s => ({ label: s.name, value: s.id }));
 
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="px-4 pb-8 gap-5 max-w-2xl w-full mx-auto">
       <Card className="p-4">
         <Text className="text-xs font-semibold text-ink-500 uppercase tracking-wide">Mağaza</Text>
         <View className="mt-1.5">
-          <Select
-            value={effectiveStoreId}
-            onValueChange={authStoreId ? () => {} : setStoreId}
-            options={storeOptions}
-          />
+          {storeOptions.length > 0 ? (
+            <Select
+              value={effectiveStoreId}
+              onValueChange={authStoreId ? () => {} : setStoreId}
+              options={storeOptions}
+            />
+          ) : (
+            <Text className="text-sm text-ex-red py-2">Tarama için tanımlı mağaza bulunamadı.</Text>
+          )}
         </View>
       </Card>
 
@@ -283,13 +317,27 @@ export function AdminScanner() {
                 placeholder="EX-XXXXXXXX-XXXX"
                 placeholderTextColor="#9494A0"
                 autoCapitalize="characters"
+                autoCorrect={false}
+                onSubmitEditing={() => { void handleManualSubmit(); }}
+                returnKeyType="done"
               />
               <Text className="text-[11px] text-ink-400 mt-2">Müşterinin QR kodunun altındaki harf-rakam dizisini girin.</Text>
             </View>
-            <Button full onPress={handleManualSubmit} disabled={!manualCode.trim() || status === 'processing'}>
+            <Button
+              full
+              onPress={() => { void handleManualSubmit(); }}
+              disabled={!manualCode.trim() || status === 'processing' || storeOptions.length === 0}
+            >
               {status === 'processing' ? <Loader2 size={16} color="#fff" /> : <><ScanLine size={16} color="#fff" /> Damga Ekle</>}
             </Button>
           </View>
+          {(status === 'success' || status === 'error') && mode === 'manual' && (
+            <View className="mt-4 pt-4 border-t border-ink-100">
+              <Button variant="subtle" full onPress={reset}>
+                <RotateCcw size={16} color="#6E6E78" /> Yeni Tarama
+              </Button>
+            </View>
+          )}
         </Card>
       )}
 
@@ -353,7 +401,7 @@ export function AdminScanner() {
       )}
 
       <Text className="text-center text-[11px] text-ink-300 leading-relaxed px-4">
-        Müşterinin telefonundaki QR kodunu kameraya gösterin veya kodu manuel girin. Her tarama bir damga ve {POINTS_PER_STAMP} puan kazandırır. {STAMPS_TO_REWARD} damgada ücretsiz ödül.
+        Müşterinin telefonundaki QR kodunu kameraya gösterin veya kodu manuel girin. Her tarama bir damga ve puan kazandırır. {STAMPS_TO_REWARD} damgada tekrar okutarak ücretsiz kahve kullanılır ve kart sıfırlanır.
       </Text>
     </ScrollView>
   );
@@ -361,4 +409,11 @@ export function AdminScanner() {
 
 function now(): string {
   return new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** EX-XXXXXXXX-XXXX formatına normalize eder; boşluk ve URL içinden çıkarır */
+function normalizeQrCode(raw: string): string {
+  const trimmed = raw.trim().toUpperCase();
+  const match = trimmed.match(/EX-[A-Z0-9]+-[A-Z0-9]+/);
+  return match ? match[0] : trimmed.replace(/\s+/g, '');
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, Pressable, Image, ScrollView } from 'react-native';
 import { Gift, Crown, Zap, Trophy, Users, TrendingUp, Star, Plus, Edit2, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/Charts';
 import { useAdmin, genId } from '@/context/AdminContext';
@@ -17,13 +17,8 @@ const challengeTypeOptions = [
   { label: 'Haftalık', value: 'weekly' }, { label: 'Aylık', value: 'monthly' }, { label: 'Seri', value: 'streak' },
 ];
 
-const tierCounts = [
-  { label: 'Bronz', value: 1420 }, { label: 'Gümüş', value: 2890 }, { label: 'Altın', value: 1640 },
-  { label: 'Siyah', value: 612 }, { label: 'VIP', value: 184 },
-];
-
 export function AdminLoyalty() {
-  const { tiers, updateTier, rewards, addReward, updateReward, deleteReward, challenges, addChallenge, updateChallenge, deleteChallenge } = useAdmin();
+  const { tiers, updateTier, rewards, addReward, updateReward, deleteReward, challenges, addChallenge, updateChallenge, deleteChallenge, customers } = useAdmin();
   const [editingTier, setEditingTier] = useState<typeof tiers[0] | null>(null);
   const [tierForm, setTierForm] = useState<{ minPoints: number; perks: string }>({ minPoints: 0, perks: '' });
 
@@ -36,6 +31,14 @@ export function AdminLoyalty() {
   const [creatingChallenge, setCreatingChallenge] = useState(false);
   const [confirmChallengeDelete, setConfirmChallengeDelete] = useState<string | null>(null);
   const [challengeForm, setChallengeForm] = useState<Challenge | null>(null);
+
+  const tierCounts = useMemo(() => {
+    const labels = ['Bronz', 'Gümüş', 'Altın', 'Siyah', 'VIP'];
+    return labels.map(label => ({
+      label,
+      value: customers.filter(c => c.tier === label || (label === 'VIP' && c.tier === 'Siyah')).length,
+    }));
+  }, [customers]);
 
   const openTierEdit = (t: typeof tiers[0]) => { setTierForm({ minPoints: t.minPoints, perks: t.perks.join(', ') }); setEditingTier(t); };
   const saveTier = () => {
@@ -57,14 +60,17 @@ export function AdminLoyalty() {
   const openChallengeEdit = (c: Challenge) => { setChallengeForm({ ...c }); setEditingChallenge(c); };
   const saveChallenge = () => {
     if (!challengeForm?.title.trim()) return;
-    if (creatingChallenge) addChallenge(challengeForm); else if (editingChallenge) updateChallenge(editingChallenge.id, challengeForm);
-    setEditingChallenge(null); setCreatingChallenge(false);
+    void (async () => {
+      if (creatingChallenge) await addChallenge(challengeForm);
+      else if (editingChallenge) await updateChallenge(editingChallenge.id, challengeForm);
+      setEditingChallenge(null); setCreatingChallenge(false);
+    })();
   };
 
   return (
     <View className="max-w-4xl w-full mx-auto gap-5">
       <View className="flex-row flex-wrap gap-4">
-        <View className="flex-1 min-w-[160px]"><StatCard label="Sadakat üyesi" value="6.746" change="+8.4%" icon={<Users size={18} color="#C8102E" />} /></View>
+        <View className="flex-1 min-w-[160px]"><StatCard label="Sadakat üyesi" value={String(customers.length)} icon={<Users size={18} color="#C8102E" />} /></View>
         <View className="flex-1 min-w-[160px]"><StatCard label="Dağıtılan puan" value="1,2M" change="+12%" icon={<Zap size={18} color="#C8102E" />} /></View>
         <View className="flex-1 min-w-[160px]"><StatCard label="Kullanılan ödül" value="3.840" change="+18%" icon={<Gift size={18} color="#C8102E" />} /></View>
         <View className="flex-1 min-w-[160px]"><StatCard label="Etkileşim" value="%78,4" change="+5.6%" icon={<TrendingUp size={18} color="#C8102E" />} /></View>
@@ -167,10 +173,10 @@ export function AdminLoyalty() {
             </View>
             <FormField label="Minimum puan"><TextInput value={String(tierForm.minPoints)} onChangeText={v => setTierForm({ ...tierForm, minPoints: Number(v) || 0 })} keyboardType="numeric" /></FormField>
             <FormField label="Avantajlar" hint="Virgülle ayır"><TextArea value={tierForm.perks} onChangeText={v => setTierForm({ ...tierForm, perks: v })} /></FormField>
-            <View className="flex-row gap-3">
-              <Button variant="outline" full onPress={() => setEditingTier(null)}>Vazgeç</Button>
-              <Button variant="gold" full onPress={saveTier}>Kaydet</Button>
-            </View>
+            <ButtonRow>
+              <Button variant="outline" flex onPress={() => setEditingTier(null)}>Vazgeç</Button>
+              <Button variant="gold" flex onPress={saveTier}>Kaydet</Button>
+            </ButtonRow>
           </View>
         )}
       </Modal>
@@ -185,10 +191,10 @@ export function AdminLoyalty() {
               <View className="flex-1"><FormField label="Kategori"><Select value={rewardForm.category} onValueChange={v => setRewardForm({ ...rewardForm, category: v })} options={categoryOptions} /></FormField></View>
             </View>
             <FormField label="Görsel URL"><TextInput value={rewardForm.image} onChangeText={v => setRewardForm({ ...rewardForm, image: v })} /></FormField>
-            <View className="flex-row gap-3">
-              <Button variant="outline" full onPress={() => { setEditingReward(null); setCreatingReward(false); }}>Vazgeç</Button>
-              <Button variant="gold" full onPress={saveReward} disabled={!rewardForm.title.trim()}>Kaydet</Button>
-            </View>
+            <ButtonRow>
+              <Button variant="outline" flex onPress={() => { setEditingReward(null); setCreatingReward(false); }}>Vazgeç</Button>
+              <Button variant="gold" flex onPress={saveReward} disabled={!rewardForm.title.trim()}>Kaydet</Button>
+            </ButtonRow>
           </View>
         )}
       </Modal>
@@ -207,10 +213,10 @@ export function AdminLoyalty() {
               <View className="flex-1"><FormField label="Tür"><Select value={challengeForm.type} onValueChange={v => setChallengeForm({ ...challengeForm, type: v as Challenge['type'] })} options={challengeTypeOptions} /></FormField></View>
               <View className="flex-1"><FormField label="Bitiş"><TextInput value={challengeForm.expires} onChangeText={v => setChallengeForm({ ...challengeForm, expires: v })} /></FormField></View>
             </View>
-            <View className="flex-row gap-3">
-              <Button variant="outline" full onPress={() => { setEditingChallenge(null); setCreatingChallenge(false); }}>Vazgeç</Button>
-              <Button variant="gold" full onPress={saveChallenge} disabled={!challengeForm.title.trim()}>Kaydet</Button>
-            </View>
+            <ButtonRow>
+              <Button variant="outline" flex onPress={() => { setEditingChallenge(null); setCreatingChallenge(false); }}>Vazgeç</Button>
+              <Button variant="gold" flex onPress={saveChallenge} disabled={!challengeForm.title.trim()}>Kaydet</Button>
+            </ButtonRow>
           </View>
         )}
       </Modal>

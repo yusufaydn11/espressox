@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image, ScrollView, TextInput as RNTextInput } from 'react-native';
 import { Plus, Search, Star, Edit2, Trash2, Coffee } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select, Toggle } from '@/components/ui/Modal';
 import { useAdmin, genId } from '@/context/AdminContext';
 import { MENU_CATEGORIES } from '@/data';
@@ -159,10 +159,10 @@ export function AdminProducts() {
             <Toggle checked={form.seasonal} onChange={v => set('seasonal', v)} label="Mevsimlik" />
             <Toggle checked={form.aiRecommended ?? false} onChange={v => set('aiRecommended', v)} label="AI önerisi" />
           </View>
-          <View className="flex-row gap-3 pt-2">
-            <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" full onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
-          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
+          </ButtonRow>
         </View>
       </Modal>
 

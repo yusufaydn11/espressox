@@ -53,16 +53,16 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
         <View className="relative w-full max-w-sm bg-white rounded-3xl shadow-premium p-6">
           <Text className="text-lg font-semibold text-ink-900">{title}</Text>
           <Text className="text-sm text-ink-500 mt-2">{message}</Text>
-          <View className="flex-row gap-3 mt-6">
+          <View className="flex-row items-stretch gap-3 mt-6">
             <Pressable
               onPress={onClose}
-              className="flex-1 px-4 py-3 rounded-xl border border-ink-200 items-center active:bg-ink-50"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-ink-200 items-center justify-center active:bg-ink-50"
             >
               <Text className="text-sm font-medium text-ink-600">Vazgeç</Text>
             </Pressable>
             <Pressable
               onPress={() => { onConfirm(); onClose(); }}
-              className="flex-1 px-4 py-3 rounded-xl bg-ex-red items-center active:bg-ex-redDark"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-ex-red items-center justify-center active:bg-ex-redDark"
             >
               <Text className="text-sm font-semibold text-white">{confirmLabel}</Text>
             </Pressable>

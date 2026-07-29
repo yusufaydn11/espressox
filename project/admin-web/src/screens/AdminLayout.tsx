@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingBag, PackageOpen, FolderTree, Megaphone, Ticket,
   Crown, Users, Bell, Store, Building2, UserCog, Boxes, BarChart3, Settings,
   LogOut, Menu, X, ChevronDown, Coffee, Sun, Moon, PackageCheck, PackageSearch,
-  TrendingUp, FileBarChart, Wallet, type LucideIcon,
+  TrendingUp, FileBarChart, Wallet, Smartphone, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -70,6 +70,15 @@ const NAV: { section: string; items: NavItem[] }[] = [
 
 const roleLabels = ROLE_LABELS;
 
+function getCustomerAppUrl(): string {
+  const envUrl = import.meta.env.VITE_CUSTOMER_APP_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:8080`;
+  }
+  return 'http://localhost:8080';
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { profile, primaryRole, signOut } = useAuth();
   const { theme, toggle } = useTheme();
@@ -83,16 +92,26 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     items: g.items.filter(i => i.roles.includes(role)),
   })).filter(g => g.items.length > 0);
 
-  const Sidebar = (
+  const Sidebar = ({ showClose = false }: { showClose?: boolean }) => (
     <div className="flex h-full flex-col bg-ink-950 text-white">
       <div className="flex items-center gap-3 px-5 h-16 border-b border-ink-800 shrink-0">
-        <div className="h-9 w-9 rounded-xl bg-ex-red flex items-center justify-center shadow-red">
+        <div className="h-9 w-9 rounded-xl bg-ex-red flex items-center justify-center shadow-red shrink-0">
           <Coffee size={18} color="#fff" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-bold leading-none">Espresso X</p>
           <p className="text-[10px] text-ink-400 mt-1">Merkez Yönetim</p>
         </div>
+        {showClose && (
+          <button
+            type="button"
+            className="h-9 w-9 rounded-xl hover:bg-ink-800 flex items-center justify-center shrink-0"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Menüyü kapat"
+          >
+            <X size={18} className="text-ink-300" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
@@ -123,7 +142,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      <div className="border-t border-ink-800 p-3 shrink-0">
+      <div className="border-t border-ink-800 p-3 shrink-0 space-y-1">
+        <a
+          href={getCustomerAppUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-ex-red bg-ex-red/10 hover:bg-ex-red/15 transition-colors"
+        >
+          <Smartphone size={16} /> Müşteriye geç
+        </a>
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-ink-800 cursor-pointer" onClick={() => setUserMenu(v => !v)}>
           <div className="h-9 w-9 rounded-xl bg-gold-gradient flex items-center justify-center text-xs font-bold text-white shrink-0">
             {(profile?.full_name ?? 'A').charAt(0).toUpperCase()}
@@ -157,14 +184,16 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-cream-50 dark:bg-ink-950 flex">
       {/* Desktop sidebar */}
       <aside className="hidden lg:block w-64 fixed inset-y-0 left-0 z-30">
-        {Sidebar}
+        <Sidebar />
       </aside>
 
       {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-ink-950/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <div className="relative w-64 h-full animate-slide-in">{Sidebar}</div>
+          <div className="relative w-64 h-full animate-slide-in">
+            <Sidebar showClose />
+          </div>
         </div>
       )}
 
@@ -177,10 +206,18 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             </button>
             <h2 className="text-base font-bold text-ink-900 dark:text-ink-100 hidden sm:block">{pageTitle}</h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={getCustomerAppUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-ex-red bg-ex-red/10 hover:bg-ex-red/15 transition-colors whitespace-nowrap"
+            >
+              <Smartphone size={14} /> Müşteriye geç
+            </a>
             <button
               onClick={toggle}
-              className="h-9 w-9 rounded-xl hover:bg-ink-100 dark:hover:bg-ink-800 flex items-center justify-center text-ink-600 dark:text-ink-300 transition-colors"
+              className="h-9 w-9 rounded-xl hover:bg-ink-100 dark:hover:bg-ink-800 flex items-center justify-center text-ink-600 dark:text-ink-300 transition-colors shrink-0"
               aria-label="Tema değiştir"
             >
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
@@ -201,12 +238,6 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
-
-      {mobileOpen && (
-        <button className="lg:hidden fixed top-4 right-4 z-[60] h-10 w-10 rounded-xl bg-white shadow-soft flex items-center justify-center" onClick={() => setMobileOpen(false)}>
-          <X size={20} className="text-ink-700" />
-        </button>
-      )}
     </div>
   );
 }

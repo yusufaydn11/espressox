@@ -48,7 +48,7 @@ export function AnalyticsScreen() {
           <div className="flex items-center gap-2">
             <RangeSelector value={range} options={RANGE_OPTIONS} onChange={setRange} />
             <Button variant="outline" size="sm" onClick={reload}>
-              <RefreshCw size={14} className="mr-1.5 inline" />
+              <RefreshCw size={14} className="inline" />
               Yenile
             </Button>
           </div>

@@ -1,32 +1,37 @@
-import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { ShoppingBag } from 'lucide-react';
+import { useEffect, useState, lazy, Suspense } from 'react';
+import { View, ScrollView } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { formatPrice } from '@/lib/utils';
-import { CustomerHeader } from '@/components/CustomerHeader';
-import { BottomNav } from '@/components/BottomNav';
+import { SideNav } from '@/components/SideNav';
+import { ThemeCanvas } from '@/components/customer/ThemeCanvas';
 import { HomeScreen } from '@/screens/customer/HomeScreen';
 import { MenuScreen } from '@/screens/customer/MenuScreen';
 import { QrScreen } from '@/screens/customer/QrScreen';
 import { CampaignsScreen } from '@/screens/customer/CampaignsScreen';
 import { ProfileScreen } from '@/screens/customer/ProfileScreen';
-import { RewardsSheet } from '@/screens/customer/RewardsSheet';
-import { OrdersSheet } from '@/screens/customer/OrdersSheet';
 import { ProductDetailSheet } from '@/screens/customer/ProductDetailSheet';
 import { CartSheet, CheckoutSheet, TrackingSheet } from '@/screens/customer/OrderSheets';
-import { PromotionsSheet } from '@/screens/customer/PromotionsSheet';
-import { StoresSheet } from '@/screens/customer/StoresSheet';
-import { AiAssistantSheet } from '@/screens/customer/AiAssistantSheet';
-import { NotificationSettingsSheet } from '@/screens/customer/NotificationSettingsSheet';
-import { NotificationCenterSheet } from '@/screens/customer/NotificationCenterSheet';
-import { AccountSettingsSheet } from '@/screens/customer/AccountSettingsSheet';
-import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
 import { OnboardingFlow } from '@/screens/customer/OnboardingFlow';
 import { hasCompletedOnboarding } from '@/lib/onboarding';
 
+const RewardsSheet = lazy(() => import('@/screens/customer/RewardsSheet').then(m => ({ default: m.RewardsSheet })));
+const OrdersSheet = lazy(() => import('@/screens/customer/OrdersSheet').then(m => ({ default: m.OrdersSheet })));
+const OrderDetailSheet = lazy(() => import('@/screens/customer/OrderDetailSheet').then(m => ({ default: m.OrderDetailSheet })));
+const PromotionsSheet = lazy(() => import('@/screens/customer/PromotionsSheet').then(m => ({ default: m.PromotionsSheet })));
+const StoresSheet = lazy(() => import('@/screens/customer/StoresSheet').then(m => ({ default: m.StoresSheet })));
+const AiAssistantSheet = lazy(() => import('@/screens/customer/AiAssistantSheet').then(m => ({ default: m.AiAssistantSheet })));
+const NotificationSettingsSheet = lazy(() => import('@/screens/customer/NotificationSettingsSheet').then(m => ({ default: m.NotificationSettingsSheet })));
+const NotificationCenterSheet = lazy(() => import('@/screens/customer/NotificationCenterSheet').then(m => ({ default: m.NotificationCenterSheet })));
+const AccountSettingsSheet = lazy(() => import('@/screens/customer/AccountSettingsSheet').then(m => ({ default: m.AccountSettingsSheet })));
+const PasswordResetSheet = lazy(() => import('@/screens/customer/PasswordResetSheet').then(m => ({ default: m.PasswordResetSheet })));
+const AddressesSheet = lazy(() => import('@/screens/customer/AddressesSheet').then(m => ({ default: m.AddressesSheet })));
+
+function LazySheet({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>;
+}
+
 export function CustomerApp() {
-  const { tab, cartCount, cartTotal, openSheet } = useApp();
+  const { tab } = useApp();
   const { user } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -40,60 +45,40 @@ export function CustomerApp() {
   }, [user?.id]);
 
   return (
-    <View className="flex-1 bg-cream-50">
-      <CustomerHeader />
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="pb-32">
-        {tab === 'home' && <HomeScreen />}
-        {tab === 'menu' && <MenuScreen />}
-        {tab === 'qr' && <QrScreen />}
-        {tab === 'campaigns' && <CampaignsScreen />}
-        {tab === 'profile' && <ProfileScreen />}
-      </ScrollView>
+    <View className="flex-1 flex-row bg-cream-50">
+      <SideNav />
 
-      {cartCount > 0 && tab !== 'menu' && (
-        <Pressable
-          onPress={() => openSheet('cart')}
-          className="absolute bottom-24 inset-x-5 z-30"
-        >
-          <View className="flex-row items-center justify-between px-5 py-3.5 rounded-2xl bg-ink-900 shadow-premium">
-            <View className="flex-row items-center gap-3">
-              <View className="relative h-9 w-9 rounded-xl bg-ex-red items-center justify-center">
-                <ShoppingBag size={17} color="#fff" />
-                <View className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 items-center justify-center rounded-full bg-white">
-                  <Text className="text-ex-red text-[9px] font-bold">{cartCount}</Text>
-                </View>
-              </View>
-              <View>
-                <Text className="text-sm font-semibold text-white leading-none">Siparişi gör</Text>
-                <Text className="text-[11px] text-ink-300 mt-0.5">{cartCount} ürün · {formatPrice(cartTotal)}</Text>
-              </View>
-            </View>
-            <Text className="text-sm font-semibold text-ex-redLight">Ödemeye geç →</Text>
-          </View>
-        </Pressable>
-      )}
-
-      <BottomNav />
+      <ThemeCanvas className="flex-1">
+        {tab === 'menu' ? (
+          <MenuScreen />
+        ) : (
+          <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="pb-10">
+            {tab === 'home' && <HomeScreen />}
+            {tab === 'qr' && <QrScreen />}
+            {tab === 'campaigns' && <CampaignsScreen />}
+            {tab === 'profile' && <ProfileScreen />}
+          </ScrollView>
+        )}
+      </ThemeCanvas>
 
       <ProductDetailSheet />
       <CartSheet />
       <CheckoutSheet />
       <TrackingSheet />
-      <PromotionsSheet />
-      <StoresSheet />
-      <AiAssistantSheet />
-      <NotificationSettingsSheet />
-      <NotificationCenterSheet />
-      <AccountSettingsSheet />
-      <PasswordResetSheet />
-      <RewardsSheet />
-      <OrdersSheet />
+      <LazySheet><PromotionsSheet /></LazySheet>
+      <LazySheet><StoresSheet /></LazySheet>
+      <LazySheet><AiAssistantSheet /></LazySheet>
+      <LazySheet><NotificationSettingsSheet /></LazySheet>
+      <LazySheet><NotificationCenterSheet /></LazySheet>
+      <LazySheet><AccountSettingsSheet /></LazySheet>
+      <LazySheet><PasswordResetSheet /></LazySheet>
+      <LazySheet><RewardsSheet /></LazySheet>
+      <LazySheet><OrdersSheet /></LazySheet>
+      <LazySheet><OrderDetailSheet /></LazySheet>
+      <LazySheet><AddressesSheet /></LazySheet>
 
       {onboardingChecked && showOnboarding && user?.id && (
-        <OnboardingFlow
-          userId={user.id}
-          onComplete={() => setShowOnboarding(false)}
-        />
+        <OnboardingFlow userId={user.id} onComplete={() => setShowOnboarding(false)} />
       )}
     </View>
   );

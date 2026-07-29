@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-do
 import { useAuth } from './lib/auth';
 import { AdminLayout } from './screens/AdminLayout';
 import { LoginScreen } from './screens/LoginScreen';
+import { NotFoundScreen, MaintenanceScreen } from './screens/SystemScreens';
 import { Spinner } from './lib/ui';
 import { Dashboard } from './screens/Dashboard';
 import { OrdersScreen } from './screens/OrdersScreen';
@@ -80,8 +81,17 @@ function B2BOrderDetailWrapper() {
   return <B2BOrderDetailScreen orderId={orderId} onBack={() => navigate('/b2b-orders')} />;
 }
 
+function B2BOrdersWrapper() {
+  const navigate = useNavigate();
+  return <B2BOrdersScreen onOpenOrder={(id) => navigate(`/b2b-orders/${id}`)} />;
+}
+
 export default function App() {
   const { loading, rolesLoaded, user, primaryRole } = useAuth();
+
+  if (import.meta.env.VITE_MAINTENANCE_MODE === 'true') {
+    return <MaintenanceScreen />;
+  }
 
   if (loading) return <Spinner label="Yükleniyor…" />;
   if (!user) return <LoginScreen />;
@@ -109,7 +119,7 @@ export default function App() {
       <Route path="/franchises" element={<Protected roles={[...HQ_ROLES]}><FranchisesScreen /></Protected>} />
       <Route path="/employees" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><EmployeesScreen /></Protected>} />
       <Route path="/inventory" element={<Protected roles={['super_admin', 'admin', 'store_manager', 'staff']}><InventoryScreen /></Protected>} />
-      <Route path="/b2b-orders" element={<Protected roles={[...HQ_ROLES]}><B2BOrdersScreen onOpenOrder={(id) => window.location.href = `/b2b-orders/${id}`} /></Protected>} />
+      <Route path="/b2b-orders" element={<Protected roles={[...HQ_ROLES]}><B2BOrdersWrapper /></Protected>} />
       <Route path="/b2b-orders/:orderId" element={<Protected roles={[...HQ_ROLES]}><B2BOrderDetailWrapper /></Protected>} />
       <Route path="/b2b-products" element={<Protected roles={[...HQ_ROLES]}><B2BProductsScreen /></Protected>} />
       <Route path="/hq/finance" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><FinanceScreen /></LazyScreen></Protected>} />
@@ -119,7 +129,7 @@ export default function App() {
       <Route path="/analytics" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><AnalyticsScreen /></LazyScreen></Protected>} />
       <Route path="/reports" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><ReportsScreen /></LazyScreen></Protected>} />
       <Route path="/settings" element={<Protected roles={[...HQ_ROLES]}><SettingsScreen /></Protected>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager', 'staff']}><NotFoundScreen /></Protected>} />
     </Routes>
   );
 }

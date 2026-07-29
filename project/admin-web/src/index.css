@@ -24,7 +24,10 @@
     @apply bg-ink-900 border-ink-800;
   }
   .admin-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .admin-btn svg {
+    @apply shrink-0;
   }
   .admin-input {
     @apply w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 outline-none transition-all placeholder:text-ink-400 focus:border-ex-red focus:ring-2 focus:ring-ex-red/10;

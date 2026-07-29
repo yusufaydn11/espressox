@@ -32,11 +32,11 @@ export function FranchiseFinanceScreen() {
     <div className="space-y-6 min-w-0 overflow-x-hidden">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => navigate('/hq/finance')}>
-          <ArrowLeft size={16} className="mr-1.5 inline" />
+          <ArrowLeft size={16} className="inline" />
           Finansa Dön
         </Button>
         <Button variant="outline" size="sm" onClick={reload} className="ml-auto">
-          <RefreshCw size={14} className="mr-1.5 inline" />
+          <RefreshCw size={14} className="inline" />
           Yenile
         </Button>
       </div>

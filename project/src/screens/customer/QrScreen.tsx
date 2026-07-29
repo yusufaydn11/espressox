@@ -1,18 +1,20 @@
 import { Crown, Maximize2, Gift, Coffee } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
-import QRCode from 'qrcode';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
 import { useApp } from '@/context/AppContext';
 import { useQrCode, useLoyaltyStamps } from '@/lib/hooks';
 import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { QrCodeImage } from '@/components/customer/QrCodeImage';
+import { PageHeader, ScreenWrapper } from '@/components/customer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { STAMP_CARD_SIZE } from '@shared/constants/loyalty';
 import { computeStampProgress, formatPoints } from '@shared/utils/loyalty';
 import { cn } from '@/lib/utils';
+import { colors } from '@shared/design/tokens';
 
 export function QrScreen() {
   const { profile } = useAuth();
@@ -29,58 +31,64 @@ export function QrScreen() {
   const currentStamps = stampProgress.currentStamps;
 
   return (
-    <View className="mx-auto max-w-md px-5 pt-4 pb-32 w-full">
-      <SectionHeader title="QR Kartım" subtitle="Mağazada okut, puan kazan" />
+    <ScreenWrapper width="default">
+      <PageHeader title="QR Kartım" subtitle="Mağazada okut, puan kazan" />
 
-      <Pressable onPress={() => setQrFullOpen(true)} className="active:opacity-90">
-        <Card className="p-6 items-center mb-6">
-          {loading ? (
-            <Text className="text-sm text-ink-400 py-8">QR kod oluşturuluyor…</Text>
-          ) : qrCode ? (
-            <>
-              <View className="w-52 h-52 rounded-2xl bg-white p-4 shadow-soft border border-ink-100 items-center justify-center">
-                <QrSvg value={qrCode.code} size={180} />
-              </View>
-              <View className="mt-5 flex-row items-center justify-center gap-2">
-                <Maximize2 size={15} color="#C8102E" />
-                <Text className="text-sm font-medium text-ex-red">Büyütmek için dokun</Text>
-              </View>
-            </>
-          ) : (
-            <Text className="text-sm text-ex-red py-8">QR kod yüklenemedi</Text>
-          )}
-        </Card>
-      </Pressable>
+      <View className="flex-row gap-6">
+        <View className="flex-1">
+          <Pressable onPress={() => setQrFullOpen(true)} className="active:scale-[0.98]">
+            <View className="bg-white rounded-[1.75rem] p-8 items-center shadow-premium border border-cream-200">
+              <LinearGradient colors={[colors.ex.red, colors.ex.redDark]} className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[1.75rem]" />
+              {loading ? (
+                <Text className="text-sm text-ink-400 py-12">QR kod oluşturuluyor…</Text>
+              ) : qrCode ? (
+                <>
+                  <View className="px-3 py-1 rounded-full bg-ex-red/10 mb-5 mt-1">
+                    <Text className="text-[10px] font-bold text-ex-red uppercase tracking-widest">Okut · Puan Kazan</Text>
+                  </View>
+                  <View className="rounded-2xl bg-white p-3 border-2 border-cream-200 items-center justify-center">
+                    <QrCodeImage value={qrCode.code} size={220} />
+                  </View>
+                  <View className="mt-5 flex-row items-center gap-2 px-4 py-2 rounded-full bg-ex-red/5">
+                    <Maximize2 size={14} color={colors.ex.red} />
+                    <Text className="text-sm font-semibold text-ex-red">Büyütmek için dokun</Text>
+                  </View>
+                </>
+              ) : (
+                <Text className="text-sm text-ex-red py-12">QR kod yüklenemedi</Text>
+              )}
+            </View>
+          </Pressable>
+        </View>
 
-      <View className="flex-row gap-3 mb-6">
-        <Card className="flex-1 p-4 items-center">
-          <Crown size={18} color="#C8102E" />
-          <Text className="text-base font-bold text-ink-900 leading-none mt-1.5">{tier}</Text>
-          <Text className="text-[10px] text-ink-400 mt-1">Seviye</Text>
-        </Card>
-        <Card className="flex-1 p-4 items-center">
-          <Gift size={18} color="#C8102E" />
-          <Text className="text-base font-bold text-ink-900 leading-none mt-1.5">{formatPoints(points)}</Text>
-          <Text className="text-[10px] text-ink-400 mt-1">Puan</Text>
-        </Card>
-        <Card className="flex-1 p-4 items-center">
-          <Coffee size={18} color="#C8102E" />
-          <Text className="text-base font-bold text-ink-900 leading-none mt-1.5">{freeCoffees}</Text>
-          <Text className="text-[10px] text-ink-400 mt-1">Ücretsiz</Text>
-        </Card>
+        <View className="w-52 gap-3">
+          {[
+            { icon: Crown, label: 'Seviye', value: tier, accent: true },
+            { icon: Gift, label: 'Puan', value: formatPoints(points), accent: false },
+            { icon: Coffee, label: 'Ücretsiz', value: String(freeCoffees), accent: false },
+          ].map(({ icon: Icon, label, value, accent }) => (
+            <Card key={label} className={cn('p-5 items-center', accent && 'border-ex-red/20 bg-ex-red/5')}>
+              <View className={cn('h-10 w-10 rounded-xl items-center justify-center mb-2', accent ? 'bg-ex-red' : 'bg-cream-100')}>
+                <Icon size={18} color={accent ? '#fff' : colors.ex.red} />
+              </View>
+              <Text className="text-xl font-bold text-ink-900 font-display leading-none">{value}</Text>
+              <Text className="text-[10px] text-ink-400 mt-1 uppercase tracking-wide">{label}</Text>
+            </Card>
+          ))}
+        </View>
       </View>
 
-      <View className="mb-6">
+      <View className="mt-8 mb-6">
         <SectionHeader title="Damga Kartı" subtitle={`${STAMP_CARD_SIZE} kahve al, 1 ücretsiz`} />
-        <Card className="p-5">
+        <Card className="p-5 border border-cream-200">
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-2">
-              <Coffee size={16} color="#C8102E" />
-              <Text className="text-sm font-semibold text-ink-900">{currentStamps} / {STAMP_CARD_SIZE}</Text>
+              <Coffee size={16} color={colors.ex.red} />
+              <Text className="text-sm font-bold text-ink-900">{currentStamps} / {STAMP_CARD_SIZE}</Text>
             </View>
             {freeCoffees > 0 && (
-              <View className="px-2.5 py-1 rounded-full bg-red-50">
-                <Text className="text-[10px] font-bold text-ex-red">{freeCoffees} ücretsiz kahve hazır!</Text>
+              <View className="px-3 py-1 rounded-full bg-ex-red">
+                <Text className="text-[10px] font-bold text-white">{freeCoffees} ücretsiz kahve hazır!</Text>
               </View>
             )}
           </View>
@@ -90,7 +98,7 @@ export function QrScreen() {
                 key={i}
                 className={cn(
                   'flex-1 aspect-square rounded-xl items-center justify-center',
-                  i < currentStamps ? 'bg-ex-red shadow-red' : 'bg-cream-100 border border-ink-100',
+                  i < currentStamps ? 'bg-ex-red shadow-red' : 'bg-cream-100 border border-cream-200',
                 )}
               >
                 {i < currentStamps && <Coffee size={16} color="#fff" />}
@@ -98,7 +106,9 @@ export function QrScreen() {
             ))}
           </View>
           <Text className="text-[11px] text-ink-400 mt-3 text-center">
-            {STAMP_CARD_SIZE - currentStamps} kahve daha al, bir ücretsiz kahve kazan
+            {currentStamps >= STAMP_CARD_SIZE
+              ? '5 damga tamam! Ödülünü almak için QR kodunu tekrar okut.'
+              : `${STAMP_CARD_SIZE - currentStamps} kahve daha al, bir ücretsiz kahve kazan`}
           </Text>
         </Card>
       </View>
@@ -113,11 +123,11 @@ export function QrScreen() {
             <Text className="text-sm text-ink-400 py-8">QR kod oluşturuluyor…</Text>
           ) : qrCode ? (
             <>
-              <View className="w-64 h-64 rounded-2xl bg-white p-5 shadow-lifted border border-ink-100 items-center justify-center">
-                <QrSvg value={qrCode.code} size={224} />
+              <View className="rounded-2xl bg-white p-4 border border-cream-200 items-center justify-center">
+                <QrCodeImage value={qrCode.code} size={260} />
               </View>
-              <Text className="text-lg font-bold text-ink-900 mt-5">{profile?.full_name}</Text>
-              <Text className="text-sm text-ex-red mt-0.5">{tier} Üye · {formatPoints(points)} puan</Text>
+              <Text className="text-lg font-bold text-ink-900 mt-5 font-display">{profile?.full_name}</Text>
+              <Text className="text-sm text-ex-red mt-0.5 font-semibold">{tier} Üye · {formatPoints(points)} puan</Text>
               <Text className="text-xs text-ink-400 mt-1">{qrCode.code}</Text>
               <View className="mt-4 p-3.5 rounded-xl bg-cream-100">
                 <Text className="text-[11px] text-ink-500 text-center">
@@ -130,42 +140,6 @@ export function QrScreen() {
           )}
         </View>
       </Sheet>
-    </View>
-  );
-}
-
-function QrSvg({ value, size }: { value: string; size: number }) {
-  const matrix = useMemo(() => {
-    try {
-      const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
-      return qr.modules.data;
-    } catch {
-      return null;
-    }
-  }, [value]);
-
-  if (!matrix) return <View style={{ width: size, height: size }} />;
-
-  const count = Math.sqrt(matrix.length);
-  const cellSize = size / count;
-
-  return (
-    <Svg width={size} height={size}>
-      {Array.from({ length: matrix.length }).map((_, i) => {
-        const row = Math.floor(i / count);
-        const col = i % count;
-        if (!matrix[i]) return null;
-        return (
-          <Rect
-            key={i}
-            x={col * cellSize}
-            y={row * cellSize}
-            width={cellSize}
-            height={cellSize}
-            fill="#0B0F19"
-          />
-        );
-      })}
-    </Svg>
+    </ScreenWrapper>
   );
 }

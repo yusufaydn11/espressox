@@ -3,6 +3,7 @@ import { Crown, Flame, Wallet, TrendingUp } from 'lucide-react';
 import { Card, Badge } from '../../lib/ui';
 import { formatNum } from '../../lib/utils';
 import { tierColor, TIERS } from '@shared/constants/loyalty';
+import { getActiveTierBenefits } from '@shared/utils/tierBenefits';
 import type { UserProfile } from '../../lib/supabase';
 
 export function LoyaltySummaryPanel({ customer }: { customer: UserProfile }) {
@@ -11,6 +12,7 @@ export function LoyaltySummaryPanel({ customer }: { customer: UserProfile }) {
   const progress = nextTier
     ? Math.min(100, Math.round((customer.lifetime_points / nextTier.minPoints) * 100))
     : 100;
+  const activeBenefits = getActiveTierBenefits(customer.tier, customer.lifetime_points);
 
   return (
     <Card className="p-5 min-w-0">
@@ -50,6 +52,18 @@ export function LoyaltySummaryPanel({ customer }: { customer: UserProfile }) {
           </div>
         </div>
       )}
+
+      <div className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-800">
+        <p className="text-[10px] font-bold text-ink-400 uppercase mb-2">Aktif VIP Avantajları</p>
+        <ul className="space-y-1.5">
+          {activeBenefits.map(b => (
+            <li key={b.id} className="flex items-start gap-2 text-xs text-ink-600 dark:text-ink-300">
+              <span className={b.active ? 'text-green-600' : 'text-ink-300'}>{b.active ? '●' : '○'}</span>
+              <span>{b.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </Card>
   );
 }

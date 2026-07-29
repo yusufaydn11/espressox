@@ -2,9 +2,9 @@ import type { TierInfo } from '../types/loyalty';
 
 /** Loyalty tier accent colors (mobile QR / profile). */
 export const TIER_COLORS: Record<string, string> = {
-  Bronz: '#A87F54',
-  Gumus: '#9494A0',
-  Gümüş: '#9494A0',
+  Bronz: '#B87333',
+  Gumus: '#A1A1AA',
+  Gümüş: '#A1A1AA',
   Altin: '#C8102E',
   Altın: '#C8102E',
   Siyah: '#18181B',
@@ -20,7 +20,7 @@ export const TIERS: TierInfo[] = [
   { name: 'Bronz', minPoints: 0, color: '#a87f54', perks: ['Hoş geldin ödülü', 'Doğum günü hediyesi'] },
   { name: 'Gümüş', minPoints: 1000, color: '#9ca3af', perks: ['Salı günleri 2x puan', 'Ücretsiz boy yükseltme'] },
   { name: 'Altın', minPoints: 3000, color: '#C8102E', perks: ['Favorilerde 3x puan', 'Aylık ücretsiz içecek', 'Öncelikli teslim'] },
-  { name: 'Siyah', minPoints: 7000, color: '#18181b', perks: ['Concierge sipariş', 'Özel tadım etkinlikleri', '5x puan', 'Ücretsiz teslimat'] },
+  { name: 'Siyah', minPoints: 7000, color: '#18181B', perks: ['Concierge sipariş', 'Özel tadım etkinlikleri', '5x puan', 'Ücretsiz teslimat'] },
   { name: 'VIP', minPoints: 15000, color: '#C8102E', perks: ['Kişisel kahve küratörü', 'Özel kavurum erişimi', 'Sınırsız ücretsiz ekstra', 'Yıllık altın hediye seti'] },
 ];
 
@@ -60,6 +60,7 @@ export const REWARD_BUTTON_LABELS = {
 
 export const SCAN_ERROR_LABELS: Record<string, string> = {
   qr_not_found: 'QR kodu bulunamadı veya pasif.',
+  invalid_code: 'Geçersiz QR kod formatı.',
   account_blocked: 'Müşteri hesabı engellenmiş.',
   not_owner: 'Bu mağaza için tarama yetkiniz yok.',
   store_required: 'Tarama için şube seçimi zorunlu.',

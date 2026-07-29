@@ -1,10 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, ChevronRight } from 'lucide-react';
 import { fetchOrders, updateOrderStatus } from '../lib/api';
+import { fetchOperationContextForUser } from '../services/loyalty/operationDataService';
+import { resolveOrderBenefit } from '@shared/utils/orderBenefits';
+import { OrderBenefitBlock } from '../components/operations/OrderBenefitBlock';
+import type { OrderBenefitInfo } from '@shared/types/operations';
 import { Card, Spinner, ErrorState, EmptyState, Button, PageHeader, Modal, SearchInput, Pagination, FilterChips } from '../lib/ui';
 import { useToast } from '../lib/toast';
 import { useAuth } from '../lib/auth';
 import { formatTRY, formatDateTime } from '../lib/utils';
+import { formatOrderTotalDisplay, getFreeOrderBadge } from '@shared/utils/orderDisplay';
 import type { OrderRow, OrderItemRow } from '../lib/supabase';
 
 const STATUSES = ['all', 'pending', 'preparing', 'ready', 'picked-up', 'delivered', 'cancelled'] as const;
@@ -20,6 +25,7 @@ export function OrdersScreen() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<(OrderRow & { order_items: OrderItemRow[] }) | null>(null);
+  const [selectedBenefit, setSelectedBenefit] = useState<OrderBenefitInfo | null>(null);
   const { success, error: toastError } = useToast();
   const { primaryRole } = useAuth();
   const canUpdateStatus = primaryRole !== 'staff';
@@ -36,6 +42,16 @@ export function OrdersScreen() {
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!selected) {
+      setSelectedBenefit(null);
+      return;
+    }
+    void fetchOperationContextForUser(selected.user_id).then(ctx => {
+      setSelectedBenefit(resolveOrderBenefit(selected, ctx));
+    }).catch(() => setSelectedBenefit(null));
+  }, [selected]);
 
   const changeStatus = async (id: string, status: string) => {
     try {
@@ -98,7 +114,12 @@ export function OrdersScreen() {
                    <td className="px-4 py-3.5 font-semibold text-ink-900 dark:text-ink-100">#{o.order_number}</td>
                    <td className="px-4 py-3.5 text-ink-600 dark:text-ink-300">{o.store_name}</td>
                    <td className="px-4 py-3.5 text-ink-600 dark:text-ink-300 capitalize">{o.order_type}</td>
-                   <td className="px-4 py-3.5 font-bold text-ink-900 dark:text-ink-100">{formatTRY(Number(o.total))}</td>
+                   <td className="px-4 py-3.5 font-bold text-ink-900 dark:text-ink-100">
+                     {formatOrderTotalDisplay(Number(o.total), formatTRY)}
+                     {getFreeOrderBadge(Number(o.total)) && (
+                       <span className="ml-2 text-[10px] font-semibold text-green-700 uppercase">Ücretsiz</span>
+                     )}
+                   </td>
                    <td className="px-4 py-3.5 text-ink-400 text-xs">{formatDateTime(o.created_at)}</td>
                    <td className="px-4 py-3.5"><StatusBadge status={o.status} /></td>
                    <td className="px-4 py-3.5">
@@ -126,6 +147,8 @@ export function OrdersScreen() {
               <InfoRow label="Puan Kazanıldı" value={`+${selected.points_earned}`} />
             </div>
 
+            {selectedBenefit && <OrderBenefitBlock benefit={selectedBenefit} />}
+
             <div>
               <h4 className="text-xs font-bold text-ink-400 uppercase tracking-wide mb-2">Ürünler</h4>
               <div className="space-y-2">
@@ -141,8 +164,13 @@ export function OrdersScreen() {
               </div>
               <div className="flex items-center justify-between mt-3 px-3">
                 <span className="text-sm font-semibold text-ink-600">Toplam</span>
-                <span className="text-lg font-bold text-ink-900 font-display">{formatTRY(Number(selected.total))}</span>
+                <span className={`text-lg font-bold font-display ${getFreeOrderBadge(Number(selected.total)) ? 'text-green-700' : 'text-ink-900'}`}>
+                  {formatOrderTotalDisplay(Number(selected.total), formatTRY)}
+                </span>
               </div>
+              {getFreeOrderBadge(Number(selected.total)) && (
+                <p className="text-xs text-ink-400 px-3">{getFreeOrderBadge(Number(selected.total))!.hint}</p>
+              )}
             </div>
 
             {canUpdateStatus && (

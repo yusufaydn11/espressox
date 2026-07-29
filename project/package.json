@@ -10,9 +10,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export --platform web",
+    "preview": "node scripts/preview-local.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "smoke:staging": "node scripts/smoke-staging.mjs"
+    "smoke:staging": "node scripts/smoke-staging.mjs",
+    "production:audit": "node scripts/production-audit.mjs",
+    "test:e2e": "node scripts/e2e-http.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",

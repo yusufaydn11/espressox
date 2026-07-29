@@ -15,6 +15,8 @@ export const CUSTOMER_NOTIFICATION_CATEGORIES: {
 const CATEGORY_BY_TYPE: Record<string, CustomerNotificationCategory> = {
   order: 'order',
   promotion: 'campaign',
+  promo: 'campaign',
+  campaign: 'campaign',
   reward: 'loyalty',
   admin: 'system',
   system: 'system',

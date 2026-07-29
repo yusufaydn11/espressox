@@ -1,8 +1,11 @@
 import {
   createContext, useContext, useState, useEffect, useCallback, type ReactNode,
 } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
+import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase, type Profile, type UserRole } from '@/lib/supabase';
+import { getPasswordResetRedirectUrl, applyRecoveryHash, clearRecoveryHashFromUrl } from '@/lib/authRedirect';
 
 type AuthState = {
   user: User | null;
@@ -24,6 +27,8 @@ type AuthState = {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (password: string) => Promise<{ error: string | null }>;
+  pendingPasswordReset: boolean;
+  completePasswordReset: () => void;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: string | null }>;
   deleteAccount: () => Promise<{ error: string | null }>;
@@ -38,6 +43,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [franchiseIdState, setFranchiseIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
+
+  const applyRecoveryFromUrl = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      const tokenSource = hash.includes('access_token') ? hash : search.includes('access_token') ? search : '';
+      if (!tokenSource) return false;
+      const ok = await applyRecoveryHash(tokenSource, async (accessToken, refreshToken) => {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      });
+      if (ok) {
+        clearRecoveryHashFromUrl();
+        setPendingPasswordReset(true);
+        return true;
+      }
+    }
+    return false;
+  }, []);
 
   const loadProfile = useCallback(async (uid: string) => {
     const { data, error } = await supabase
@@ -62,33 +86,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Role load error:', error.message);
       return;
     }
-    const ur = data as UserRole;
-    console.log('[Auth] Loaded role for user', uid, '→', ur?.role ?? 'none');
-    setUserRole(ur);
+    setUserRole(data as UserRole);
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    void (async () => {
+      await applyRecoveryFromUrl();
+
+      const { data: { session: s } } = await supabase.auth.getSession();
       if (!mounted) return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        Promise.all([loadProfile(s.user.id), loadRole(s.user.id)]).finally(
-          () => mounted && setLoading(false),
-        );
-      } else {
-        setLoading(false);
+        await Promise.all([loadProfile(s.user.id), loadRole(s.user.id)]);
       }
-    });
+      if (mounted) setLoading(false);
+    })();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, s) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPendingPasswordReset(true);
+      }
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
         setLoading(true);
-        (async () => {
+        void (async () => {
           await Promise.all([loadProfile(s.user.id), loadRole(s.user.id)]);
           if (mounted) setLoading(false);
         })();
@@ -104,7 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [loadProfile, loadRole]);
+  }, [loadProfile, loadRole, applyRecoveryFromUrl]);
+
+  const completePasswordReset = useCallback(() => {
+    setPendingPasswordReset(false);
+  }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -132,11 +161,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile, loadRole]);
 
   const signInWithGoogle = useCallback(async () => {
-    return { error: 'Google ile giriş mobil uygulama üzerinden yakında aktif olacak. Şimdilik e-posta ile giriş yapın.' };
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : Linking.createURL('');
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+    return { error: error ? translateError(error.message) : null };
   }, []);
 
   const signInWithApple = useCallback(async () => {
-    return { error: 'Apple ile giriş mobil uygulama üzerinden yakında aktif olacak. Şimdilik e-posta ile giriş yapın.' };
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : Linking.createURL('');
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo } });
+    return { error: error ? translateError(error.message) : null };
   }, []);
 
   const signOut = useCallback(async () => {
@@ -148,9 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
-    const redirectUrl = 'espressox://reset';
+    const redirectTo = getPasswordResetRedirectUrl();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectUrl,
+      redirectTo,
     });
     if (error) return { error: translateError(error.message) };
     return { error: null };
@@ -229,7 +266,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthState = {
     user, session, profile, loading, isAdmin, isFranchise, isStoreManager, isStaff, isInternal, storeId, role, franchiseId: franchiseIdState,
     signUp, signIn, signInWithGoogle, signInWithApple,
-    signOut, resetPassword, updatePassword, refreshProfile, updateProfile, deleteAccount,
+    signOut, resetPassword, updatePassword, pendingPasswordReset, completePasswordReset,
+    refreshProfile, updateProfile, deleteAccount,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

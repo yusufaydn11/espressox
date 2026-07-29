@@ -28,7 +28,7 @@ export function FinanceScreen() {
         subtitle="B2B cari özet, açık faturalar ve ödeme hareketleri"
         action={
           <Button variant="outline" size="sm" onClick={reload}>
-            <RefreshCw size={14} className="mr-1.5 inline" />
+            <RefreshCw size={14} className="inline" />
             Yenile
           </Button>
         }

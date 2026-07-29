@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { Crown, Zap, Gift, ChevronRight, Star, Lock, Check } from 'lucide-react';
+import { Crown, Zap, Gift, Star, Lock, Check } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { TIERS } from '@shared/constants/loyalty';
@@ -10,9 +10,15 @@ import {
   getNextTier,
   getTierProgress,
   getRewardButtonLabel,
+  computeStampProgress,
 } from '@shared/utils/loyalty';
+import { STAMP_CARD_SIZE } from '@shared/constants/loyalty';
 import { redeemReward } from '@/services/loyalty';
 import { useRewards, usePointsHistory, useLoyaltyStamps, useRewardRedemptions } from '@/lib/hooks';
+import { useOperationContext } from '@/hooks/useOperationContext';
+import { buildLoyaltyTimeline } from '@shared/utils/loyaltyTimeline';
+import { getActiveTierBenefits } from '@shared/utils/tierBenefits';
+import { LoyaltyTimelineList } from '@/components/loyalty/LoyaltyTimelineList';
 import { Sheet } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +32,7 @@ export function RewardsSheet() {
   const { data: history, error: histErr, loading: histLoading, reload: histReload } = usePointsHistory();
   const { data: stamps } = useLoyaltyStamps();
   const { data: redemptions, reload: redReload } = useRewardRedemptions();
+  const { ctx, loading: ctxLoading, error: ctxErr, reload: ctxReload } = useOperationContext();
   const [tab, setTab] = useState<'rewards' | 'history'>('rewards');
 
   const open = sheet === 'rewards';
@@ -33,10 +40,22 @@ export function RewardsSheet() {
   const points = profile?.points ?? 0;
   const tier = profile?.tier ?? 'Bronz';
   const redeemedIds = new Set(redemptions?.map(r => r.reward_id) ?? []);
-  const stampCount = stamps?.length ?? 0;
+  const activeStamps = stamps?.filter(s => !s.redeemed) ?? [];
+  const { currentStamps, freeCoffees } = computeStampProgress(activeStamps.length, STAMP_CARD_SIZE);
 
   const nextTier = getNextTier(tier);
   const tierProgress = getTierProgress(points, tier);
+  const activeBenefits = getActiveTierBenefits(tier, profile?.lifetime_points ?? 0);
+  const timeline = buildLoyaltyTimeline({
+    pointsHistory: ctx?.pointsHistory ?? history ?? [],
+    stamps: ctx?.stamps ?? stamps ?? [],
+    redemptions: ctx?.redemptions ?? redemptions ?? [],
+    freeCoffees: ctx?.freeCoffees ?? [],
+    qrScans: ctx?.qrScans ?? [],
+    notifications: ctx?.notifications ?? [],
+    rewards: ctx?.rewards ?? rewards ?? [],
+    limit: 30,
+  });
 
   const redeem = async (rewardId: string, title: string, cost: number) => {
     if (points < cost) { showToast(`${cost - points} puana daha ihtiyacın var`); return; }
@@ -105,7 +124,7 @@ export function RewardsSheet() {
           {[
             { label: 'Yaşam boyu', value: formatPoints(profile?.lifetime_points ?? 0), icon: Zap },
             { label: 'Seri', value: `${profile?.streak ?? 0} gün`, icon: Gift },
-            { label: 'Damga', value: `${stampCount}/10`, icon: Crown },
+            { label: 'Damga', value: `${currentStamps}/${STAMP_CARD_SIZE}`, icon: Crown },
           ].map(({ label, value, icon: Icon }) => (
             <Card key={label} className="flex-1 p-3.5 items-center">
               <View className="h-9 w-9 rounded-xl bg-ex-red/10 items-center justify-center">
@@ -161,9 +180,27 @@ export function RewardsSheet() {
           </ScrollView>
         </View>
 
-        {/* Tabs */}
+        <View className="rounded-2xl bg-white border border-ink-100 p-4">
+          <Text className="text-xs font-bold text-ink-400 uppercase mb-2">Aktif VIP Avantajların</Text>
+          <View className="gap-1.5">
+            {activeBenefits.slice(0, 5).map(b => (
+              <View key={b.id} className="flex-row items-center gap-2">
+                <Text className={b.active ? 'text-green-600 text-xs' : 'text-ink-300 text-xs'}>{b.active ? '●' : '○'}</Text>
+                <Text className="text-xs text-ink-600 flex-1">{b.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {freeCoffees > 0 && (
+          <View className="px-4 py-3 rounded-2xl bg-green-50 border border-green-100">
+            <Text className="text-sm font-semibold text-green-800">{freeCoffees} ücretsiz kahve hakkın var</Text>
+            <Text className="text-[11px] text-green-700 mt-0.5">Şubede QR kodunu okutarak kullan</Text>
+          </View>
+        )}
+
         <View className="flex-row gap-2 p-1 rounded-xl bg-cream-100">
-          {([['rewards', 'Ödüller'], ['history', 'Geçmiş']] as const).map(([t, label]) => (
+          {([['rewards', 'Ödüller'], ['history', 'Sadakat geçmişi']] as const).map(([t, label]) => (
             <Pressable
               key={t}
               onPress={() => setTab(t)}
@@ -190,7 +227,8 @@ export function RewardsSheet() {
             <View className="gap-3">
               {rewards?.map(reward => {
                 const canRedeem = points >= reward.points_cost;
-                const alreadyRedeemed = redeemedIds.has(reward.id) && reward.points_cost === 0;
+                const isSingleUse = reward.points_cost === 0;
+                const alreadyRedeemed = isSingleUse && redeemedIds.has(reward.id);
                 return (
                   <Card key={reward.id} className="p-3 flex-row items-center gap-3.5">
                     <Image source={{ uri: reward.image }} className="h-16 w-16 rounded-2xl" resizeMode="cover" />
@@ -221,35 +259,15 @@ export function RewardsSheet() {
 
         {tab === 'history' && (
           <StateWrapper
-            loading={histLoading}
-            error={histErr}
-            empty={!histLoading && !histErr && (history?.length ?? 0) === 0}
-            loadingLabel="Geçmiş yükleniyor…"
-            emptyTitle="Puan geçmişi boş"
-            emptySubtitle="Sipariş verdiğinde puanlar burada görünecek"
-            onRetry={histReload}
+            loading={histLoading || ctxLoading}
+            error={histErr ?? ctxErr}
+            empty={!histLoading && !ctxLoading && timeline.length === 0}
+            loadingLabel="Sadakat geçmişi yükleniyor…"
+            emptyTitle="Kayıt yok"
+            emptySubtitle="Puan, damga ve ödül hareketleri burada görünür"
+            onRetry={() => { histReload(); ctxReload(); }}
           >
-            <Card className="p-0 overflow-hidden">
-              {history?.map((h, i) => (
-                <View key={h.id} className={cn('flex-row items-center gap-3 px-4 py-3.5', i < (history.length - 1) && 'border-b border-ink-100')}>
-                  <View className={cn(
-                    'h-10 w-10 rounded-xl items-center justify-center shrink-0',
-                    h.type === 'earn' ? 'bg-green-50' : h.type === 'bonus' ? 'bg-red-50' : 'bg-ink-100',
-                  )}>
-                    {h.type === 'earn' ? <Zap size={16} color="#16a34a" /> :
-                      h.type === 'bonus' ? <Gift size={16} color="#C8102E" /> :
-                      <ChevronRight size={16} color="#9494A0" />}
-                  </View>
-                  <View className="flex-1 min-w-0">
-                    <Text className="text-sm font-semibold text-ink-900" numberOfLines={1}>{h.title}</Text>
-                    <Text className="text-[11px] text-ink-400">{new Date(h.created_at).toLocaleDateString('tr-TR')}</Text>
-                  </View>
-                  <Text className={cn('text-sm font-bold', h.points > 0 ? 'text-green-600' : 'text-ex-red')}>
-                    {h.points > 0 ? '+' : ''}{h.points}
-                  </Text>
-                </View>
-              ))}
-            </Card>
+            <LoyaltyTimelineList items={timeline} />
           </StateWrapper>
         )}
       </View>

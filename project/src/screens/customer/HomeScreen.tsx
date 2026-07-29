@@ -6,19 +6,21 @@ import { useStores, useProducts, useOrders, useCampaigns, useLoyaltyStamps } fro
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/States';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import {
   HomeHero,
   ProductCarousel,
   HomeQuickLink,
-  HomeSectionHeader,
   HomeSkeleton,
   CustomerEmptyCard,
+  ScreenWrapper,
 } from '@/components/customer';
 import { TIERS } from '@shared/constants/loyalty';
 import { mapRetailDbProductsToUi, filterRetailPopularProducts } from '@shared/utils/products';
 import type { RetailProductDbRow } from '@shared/types/products';
 import { formatPrice } from '@/lib/utils';
 import type { Store } from '@/lib/supabase';
+import { colors } from '@shared/design/tokens';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -80,13 +82,19 @@ export function HomeScreen() {
   const loading = productsLoading && !dbProducts;
   const error = productsError;
 
-  if (loading) return <HomeSkeleton />;
+  if (loading) {
+    return (
+      <ScreenWrapper width="wide">
+        <HomeSkeleton />
+      </ScreenWrapper>
+    );
+  }
 
   if (error) {
     return (
-      <View className="mx-auto max-w-md pb-32 w-full">
+      <ScreenWrapper width="wide">
         <ErrorState message={error} onRetry={reloadProducts} />
-      </View>
+      </ScreenWrapper>
     );
   }
 
@@ -102,7 +110,7 @@ export function HomeScreen() {
   const campaignPreview = campaigns?.slice(0, 2) ?? [];
 
   return (
-    <View className="mx-auto max-w-md pb-32 w-full">
+    <ScreenWrapper width="wide">
       <HomeHero
         greeting={getGreeting()}
         firstName={firstName}
@@ -118,63 +126,53 @@ export function HomeScreen() {
       />
 
       {(profile?.streak ?? 0) > 0 && (
-        <View className="px-5 mt-3">
-          <Card className="p-4 flex-row items-center gap-3 relative overflow-hidden">
-            <View className="absolute left-0 top-0 bottom-0 w-1 bg-ex-red rounded-l-2xl" />
-            <View className="h-11 w-11 rounded-2xl bg-ex-red/10 items-center justify-center">
-              <Flame size={20} color="#C8102E" fill="#C8102E" />
+        <View className="mt-6">
+          <Card className="p-4 flex-row items-center gap-3">
+            <View className="h-10 w-10 rounded-xl bg-ex-red/10 items-center justify-center">
+              <Flame size={18} color={colors.ex.red} fill={colors.ex.red} />
             </View>
             <View className="flex-1">
               <Text className="text-sm font-bold text-ink-900">{profile?.streak} günlük seri</Text>
-              <Text className="text-[11px] text-ink-400 mt-0.5">Serini koru, bonus puan kazan</Text>
-            </View>
-            <View className="px-2.5 py-1 rounded-full bg-ex-red/10">
-              <Text className="text-[10px] font-bold text-ex-red uppercase tracking-wide">Aktif</Text>
+              <Text className="text-xs text-ink-400 mt-0.5">Bonus puan için devam et</Text>
             </View>
           </Card>
         </View>
       )}
 
-      {popular.length > 0 ? (
-        <ProductCarousel
-          title="Popüler"
-          products={popular}
-          onSeeAll={() => setTab('menu')}
-        />
-      ) : (
-        <View className="px-5 mt-7">
-          <CustomerEmptyCard preset="products" actionLabel="Menüye git" onAction={() => setTab('menu')} />
-        </View>
-      )}
-
       <View className="mt-6">
-        <HomeSectionHeader title="Favori ürünler" subtitle="Senin için seçtiklerimiz" />
-        {favProducts.length > 0 ? (
-          <ProductCarousel title="" products={favProducts} icon="sparkles" showHeader={false} />
+        {popular.length > 0 ? (
+          <>
+            <SectionHeader title="Popüler" underline actionLabel="Tümü" onAction={() => setTab('menu')} />
+            <ProductCarousel title="" products={popular} showHeader={false} />
+          </>
         ) : (
-          <View className="px-5">
-            <CustomerEmptyCard
-              preset="favorites"
-              actionLabel="Menüyü keşfet"
-              onAction={() => setTab('menu')}
-            />
-          </View>
+          <CustomerEmptyCard preset="products" actionLabel="Menüye git" onAction={() => setTab('menu')} />
         )}
       </View>
 
-      <View className="mt-6 px-5">
-        <HomeSectionHeader
+      <View className="mt-6">
+        <SectionHeader title="Favori ürünler" subtitle="Senin için seçtiklerimiz" underline />
+        {favProducts.length > 0 ? (
+          <ProductCarousel title="" products={favProducts} showHeader={false} />
+        ) : (
+          <CustomerEmptyCard preset="favorites" actionLabel="Menüyü keşfet" onAction={() => setTab('menu')} />
+        )}
+      </View>
+
+      <View className="mt-6">
+        <SectionHeader
           title="Tekrar sipariş"
           subtitle="Son siparişinden hızlıca devam et"
           actionLabel="Tümü"
           onAction={() => openSheet('orders')}
+          underline
         />
         {!ordersLoading && lastOrder ? (
           <Card className="p-4">
             <View className="flex-row items-start justify-between">
               <View className="flex-1 min-w-0">
                 <Text className="text-xs text-ink-400">{lastOrder.order_number}</Text>
-                <Text className="text-sm font-semibold text-ink-900 mt-0.5" numberOfLines={1}>
+                <Text className="text-sm font-bold text-ink-900 mt-0.5" numberOfLines={1}>
                   {lastOrder.store_name}
                 </Text>
                 <Text className="text-xs text-ink-500 mt-1" numberOfLines={2}>
@@ -195,15 +193,11 @@ export function HomeScreen() {
             </Button>
           </Card>
         ) : (
-          <CustomerEmptyCard
-            preset="orders"
-            actionLabel="Sipariş ver"
-            onAction={() => setTab('menu')}
-          />
+          <CustomerEmptyCard preset="orders" actionLabel="Sipariş ver" onAction={() => setTab('menu')} />
         )}
       </View>
 
-      <View className="px-5 mt-6 gap-2.5">
+      <View className="mt-6 flex-row flex-wrap gap-3">
         {featuredStore && !storesError && (
           <HomeQuickLink
             icon={MapPin}
@@ -214,7 +208,7 @@ export function HomeScreen() {
           />
         )}
         {storesLoading && !featuredStore && (
-          <Card className="p-4 h-16 justify-center">
+          <Card className="p-4 h-16 justify-center flex-1 min-w-[280px]">
             <Text className="text-xs text-ink-400">Mağazalar yükleniyor…</Text>
           </Card>
         )}
@@ -230,10 +224,11 @@ export function HomeScreen() {
             />
           ))
         ) : !campaignsLoading ? (
-          <CustomerEmptyCard
-            preset="campaigns"
-            actionLabel="Kampanyalara git"
-            onAction={() => setTab('campaigns')}
+          <HomeQuickLink
+            icon={Gift}
+            label="Kampanyalar"
+            sub="Fırsatları keşfet"
+            onPress={() => setTab('campaigns')}
           />
         ) : (
           <HomeQuickLink icon={Gift} label="Kampanyalar" sub="Yükleniyor…" onPress={() => setTab('campaigns')} />
@@ -246,6 +241,6 @@ export function HomeScreen() {
           onPress={() => openSheet('orders')}
         />
       </View>
-    </View>
+    </ScreenWrapper>
   );
 }

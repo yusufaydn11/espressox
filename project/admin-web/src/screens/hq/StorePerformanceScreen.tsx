@@ -51,7 +51,7 @@ export function StorePerformanceScreen() {
         subtitle="HQ şube karşılaştırması, KPI ve operasyon özeti"
         action={
           <Button variant="outline" size="sm" onClick={reload}>
-            <RefreshCw size={14} className="mr-1.5 inline" />
+            <RefreshCw size={14} className="inline" />
             Yenile
           </Button>
         }

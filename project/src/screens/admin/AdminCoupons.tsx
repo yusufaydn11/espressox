@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Plus, Tag, Copy, Check, Calendar, Percent, Gift, Edit2, Trash2, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select } from '@/components/ui/Modal';
 import { useAdmin, genId, type Coupon } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,8 @@ export function AdminCoupons() {
   const [form, setForm] = useState<Coupon>(blankCoupon());
 
   const totalRedeemed = coupons.reduce((s, c) => s + c.redeemed, 0);
+  const totalLimit = coupons.reduce((s, c) => s + c.limit, 0);
+  const conversionPct = totalLimit > 0 ? Math.round((totalRedeemed / totalLimit) * 1000) / 10 : 0;
 
   const copy = (code: string) => { setCopied(code); setTimeout(() => setCopied(null), 2000); };
   const openCreate = () => { setForm(blankCoupon()); setCreating(true); };
@@ -35,8 +37,11 @@ export function AdminCoupons() {
   const closeForm = () => { setEditing(null); setCreating(false); };
   const save = () => {
     if (!form.code.trim() || !form.title.trim()) return;
-    if (creating) addCoupon(form); else if (editing) updateCoupon(editing.id, form);
-    closeForm();
+    void (async () => {
+      if (creating) await addCoupon(form);
+      else if (editing) await updateCoupon(editing.id, form);
+      closeForm();
+    })();
   };
   const set = <K extends keyof Coupon>(k: K, v: Coupon[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -64,7 +69,7 @@ export function AdminCoupons() {
         <View className="flex-1 min-w-[160px]">
           <Card className="p-4 flex-row items-center gap-3">
             <View className="h-10 w-10 rounded-2xl bg-red-50 items-center justify-center"><Percent size={18} color="#C8102E" /></View>
-            <View><Text className="text-xl font-semibold text-ink-900 leading-none">%12,8</Text><Text className="text-xs text-ink-400 mt-1">Ort. dönüşüm</Text></View>
+            <View><Text className="text-xl font-semibold text-ink-900 leading-none">{conversionPct > 0 ? `%${conversionPct}` : '—'}</Text><Text className="text-xs text-ink-400 mt-1">Ort. dönüşüm</Text></View>
           </Card>
         </View>
       </View>
@@ -87,7 +92,7 @@ export function AdminCoupons() {
                     </View>
                     <Pressable onPress={() => {
                       const next: Record<string, Coupon['status']> = { active: 'expired', expired: 'scheduled', scheduled: 'active' };
-                      updateCoupon(c.id, { status: next[c.status] });
+                      void updateCoupon(c.id, { status: next[c.status] });
                     }}>
                       <Text className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', statusColors[c.status])}>{statusLabels[c.status]}</Text>
                     </Pressable>
@@ -153,10 +158,10 @@ export function AdminCoupons() {
             <View className="flex-1"><FormField label="Limit"><TextInput value={String(form.limit)} onChangeText={v => set('limit', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
           </View>
           <FormField label="Bitiş tarihi"><TextInput value={form.expires} onChangeText={v => set('expires', v)} placeholder="31 Eki, Sürekli, 30 gün" /></FormField>
-          <View className="flex-row gap-3 pt-2">
-            <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" full onPress={save} disabled={!form.code.trim() || !form.title.trim()}>Kaydet</Button>
-          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.code.trim() || !form.title.trim()}>Kaydet</Button>
+          </ButtonRow>
         </View>
       </Modal>
 

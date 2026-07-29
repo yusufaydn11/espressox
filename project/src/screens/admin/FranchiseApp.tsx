@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import {
   LayoutDashboard, ShoppingBag, ScanLine, BarChart3, Bell,
   LogOut, Menu as MenuIcon, X, ArrowLeft, Coffee, Store,
   Package, ShoppingCart, PackageCheck, BookOpen, Receipt,
-  Wallet, Boxes,
+  Wallet, Boxes, Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useApp } from '@/context/AppContext';
 import { useAdmin } from '@/context/AdminContext';
 import {
   fetchStoreOrders,
@@ -19,6 +20,10 @@ import {
   ORDER_STATUS_BADGE_TEXT,
   nextOrderStatus,
 } from '@shared/constants/orders';
+import { formatOrderTotalDisplay } from '@shared/utils/orderDisplay';
+import { fetchDailyBenefitStats, fetchStoreOperationSnapshot } from '@/services/loyalty';
+import { resolveOrderBenefit } from '@shared/utils/orderBenefits';
+import { OrderBenefitBadge } from '@/components/orders/OrderBenefitBadge';
 import { setB2BOrderTapHandler } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -84,6 +89,7 @@ function buildGroups(role: string): string[] {
 
 type StoreOrder = {
   id: string;
+  user_id: string;
   customer: string;
   items: number;
   total: number;
@@ -104,14 +110,27 @@ type StoreNotif = {
 
 export function FranchiseApp() {
   const { user, signOut, storeId, role, franchiseId } = useAuth();
+  const { setPreviewAsCustomer } = useApp();
   const { stores } = useAdmin();
   const [page, setPage] = useState<FranchisePage>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  const isWide = Platform.OS === 'web' && width >= 1024;
+  const showSidebar = isWide || sidebarOpen;
   const [storeName, setStoreName] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [roleLandingDone, setRoleLandingDone] = useState(false);
+
+  useEffect(() => {
+    if (isWide) setSidebarOpen(false);
+  }, [isWide]);
+
+  const goToCustomer = () => {
+    setPreviewAsCustomer(true);
+    setSidebarOpen(false);
+  };
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -207,16 +226,16 @@ export function FranchiseApp() {
 
   return (
     <View className="flex-1 bg-cream-50 flex-row">
-      {sidebarOpen && (
+      {!isWide && sidebarOpen && (
         <Pressable className="absolute inset-0 z-40 bg-ink-950/40" onPress={() => setSidebarOpen(false)} />
       )}
 
       <View className={cn(
-        'absolute top-0 left-0 z-50 h-full w-64 bg-white border-r border-ink-100',
-        sidebarOpen ? 'flex' : 'hidden',
+        'h-full w-64 bg-white border-r border-ink-100 flex-col shrink-0',
+        isWide ? 'relative flex' : cn('absolute top-0 left-0 z-50', showSidebar ? 'flex' : 'hidden'),
       )}>
-        <View className="p-5 flex-row items-center gap-2.5 border-b border-ink-100 bg-cream-50">
-          <View className={cn('h-10 w-10 rounded-xl items-center justify-center shadow-soft', roleAccent)}>
+        <View className="p-5 flex-row items-center gap-2.5 border-b border-ink-100 bg-cream-50 shrink-0">
+          <View className={cn('h-10 w-10 rounded-xl items-center justify-center shadow-soft shrink-0', roleAccent)}>
             <Store size={18} color="#fff" />
           </View>
           <View className="flex-1 min-w-0">
@@ -226,7 +245,11 @@ export function FranchiseApp() {
               <Text className="text-[10px] text-ink-500 font-medium">{roleLabel}</Text>
             </View>
           </View>
-          <Pressable onPress={() => setSidebarOpen(false)} className="ml-auto"><X size={20} color="#9494A0" /></Pressable>
+          {!isWide && (
+            <Pressable onPress={() => setSidebarOpen(false)} hitSlop={8} className="shrink-0">
+              <X size={20} color="#9494A0" />
+            </Pressable>
+          )}
         </View>
 
         <View className="px-4 pt-4 pb-2">
@@ -252,7 +275,14 @@ export function FranchiseApp() {
           ))}
         </ScrollView>
 
-        <View className="p-3 border-t border-ink-100">
+        <View className="p-3 border-t border-ink-100 shrink-0 gap-1">
+          <Pressable
+            onPress={goToCustomer}
+            className="w-full flex-row items-center gap-3 px-3.5 py-2.5 rounded-xl bg-ex-red/10 active:bg-ex-red/15"
+          >
+            <Smartphone size={18} color="#C8102E" />
+            <Text className="text-sm font-semibold text-ex-red">Müşteriye geç</Text>
+          </Pressable>
           <Pressable
             onPress={() => signOut()}
             className="w-full flex-row items-center gap-3 px-3.5 py-2.5 rounded-xl active:bg-ink-50"
@@ -264,8 +294,13 @@ export function FranchiseApp() {
       </View>
 
       <View className="flex-1 min-w-0 flex-col">
-        <View className="pt-12 pb-3 px-5 border-b border-ink-100 bg-white flex-row items-center justify-between">
+        <View className="pt-4 pb-3 px-5 border-b border-ink-100 bg-white flex-row items-center justify-between shrink-0">
           <View className="flex-row items-center gap-3 flex-1 min-w-0">
+            {!isWide && (
+              <Pressable onPress={() => setSidebarOpen(true)} className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
+                <MenuIcon size={20} color="#3D3D42" />
+              </Pressable>
+            )}
             {page !== 'dashboard' && page !== 'b2b_dashboard' && (
               <Pressable
                 onPress={() => { setSelectedOrderId(null); setPage(role === 'franchise' || role === 'store_manager' ? 'b2b_dashboard' : 'dashboard'); }}
@@ -274,9 +309,6 @@ export function FranchiseApp() {
                 <ArrowLeft size={18} color="#3D3D42" />
               </Pressable>
             )}
-            <Pressable onPress={() => setSidebarOpen(true)} className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center">
-              <MenuIcon size={20} color="#3D3D42" />
-            </Pressable>
             <View className="flex-1 min-w-0">
               <Text className="text-lg font-bold text-ink-900 leading-none font-display" numberOfLines={1}>{current?.label ?? 'Panel'}</Text>
               <Text className="text-[11px] text-ink-400 mt-1" numberOfLines={1}>{storeName} · {roleLabel}</Text>
@@ -364,6 +396,7 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
     });
     setRecent(all.slice(0, 5).map(o => ({
       id: o.order_number,
+      user_id: o.user_id,
       customer: 'Müşteri',
       items: o.order_items?.length ?? 0,
       total: Number(o.total),
@@ -427,16 +460,35 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [filter, setFilter] = useState<'active' | 'all'>('active');
+  const [opSnapshot, setOpSnapshot] = useState<Awaited<ReturnType<typeof fetchStoreOperationSnapshot>> | null>(null);
+  const [dailyStats, setDailyStats] = useState<{ freeOrders: number; stampRedemptions: number; rewardRedemptions: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!storeId) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await fetchStoreOrders(storeId, 100);
+    const [{ data, error }, snap, statsRes] = await Promise.all([
+      fetchStoreOrders(storeId, 100),
+      fetchStoreOperationSnapshot(storeId).catch(() => null),
+      fetchDailyBenefitStats({ storeId }),
+    ]);
+    if (statsRes.data) {
+      setDailyStats({
+        freeOrders: statsRes.data.freeOrders,
+        stampRedemptions: statsRes.data.stampRedemptions,
+        rewardRedemptions: statsRes.data.rewardRedemptions,
+      });
+    }
+    setOpSnapshot(snap);
     if (error || !data) { setLoading(false); return; }
-    const all = data;
-    setOrders(all.map(o => ({
+    const userIds = [...new Set(data.map(o => o.user_id))];
+    const { data: profiles } = userIds.length
+      ? await supabase.from('profiles').select('user_id, full_name').in('user_id', userIds)
+      : { data: [] as { user_id: string; full_name: string }[] };
+    const nameMap = new Map((profiles ?? []).map(p => [p.user_id, p.full_name || 'Müşteri']));
+    setOrders(data.map(o => ({
       id: o.order_number,
-      customer: 'Müşteri',
+      user_id: o.user_id,
+      customer: nameMap.get(o.user_id) ?? 'Müşteri',
       items: o.order_items?.length ?? 0,
       total: Number(o.total),
       status: o.status,
@@ -468,6 +520,21 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
 
   return (
     <View className="max-w-4xl w-full mx-auto gap-5">
+      {dailyStats && (
+        <View className="flex-row flex-wrap gap-2">
+          {[
+            { label: 'Ücretsiz sipariş', value: dailyStats.freeOrders },
+            { label: 'Damga ödülü', value: dailyStats.stampRedemptions },
+            { label: 'Puan ödülü', value: dailyStats.rewardRedemptions },
+          ].map(s => (
+            <View key={s.label} className="px-3 py-2 rounded-xl bg-green-50 border border-green-100">
+              <Text className="text-[10px] text-green-700 font-semibold uppercase">{s.label}</Text>
+              <Text className="text-lg font-bold text-green-800">{s.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View className="flex-row gap-2 p-1 bg-ink-100 rounded-2xl self-start">
         <Pressable onPress={() => setFilter('active')} className={cn('px-4 py-2 rounded-xl', filter === 'active' ? 'bg-white shadow-card' : '')}>
           <Text className={cn('text-sm font-medium', filter === 'active' ? 'text-ink-900' : 'text-ink-500')}>Aktif</Text>
@@ -484,28 +551,39 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
         </View>
       ) : (
         <View className="gap-3">
-          {visible.map(o => (
-            <View key={o.id} className="rounded-2xl bg-white border border-ink-100 shadow-card p-4">
+          {visible.map(o => {
+            const benefit = opSnapshot ? resolveOrderBenefit(
+              { total: o.total, points_earned: 0, user_id: o.user_id, store_id: storeId, created_at: o.created_at },
+              opSnapshot,
+            ) : null;
+            return (
+            <View key={o.id} className={cn('rounded-2xl bg-white border shadow-card p-4', benefit && benefit.kind !== 'paid' ? 'border-green-200 bg-green-50/30' : 'border-ink-100')}>
               <View className="flex-row items-start gap-3">
                 <View className="h-11 w-11 rounded-xl bg-ink-900 items-center justify-center shrink-0"><Coffee size={18} color="#fff" /></View>
                 <View className="flex-1 min-w-0">
-                  <View className="flex-row items-center gap-2">
+                  <View className="flex-row items-center gap-2 flex-wrap">
                     <Text className="text-sm font-bold text-ink-900">{o.id}</Text>
+                    {benefit && benefit.kind !== 'paid' && <OrderBenefitBadge benefit={benefit} compact />}
                     <View className={cn('px-2 py-0.5 rounded-full', statusBadge(o.status))}>
                       <Text className={cn('text-[10px] font-semibold', statusBadgeText(o.status))}>{statusLabel(o.status)}</Text>
                     </View>
                   </View>
-                  <Text className="text-[11px] text-ink-400 mt-0.5">{o.items} ürün · {o.type} · {o.time}</Text>
+                  <Text className="text-[11px] text-ink-400 mt-0.5">{o.customer} · {o.items} ürün · {o.type} · {o.time}</Text>
+                  {benefit && benefit.kind !== 'paid' && (
+                    <Text className="text-[10px] text-green-700 mt-0.5">{benefit.detail}</Text>
+                  )}
                 </View>
-                <Text className="text-base font-bold text-ex-red">₺{o.total.toLocaleString('tr-TR')}</Text>
+                <Text className={cn('text-base font-bold', benefit && benefit.kind !== 'paid' ? 'text-green-700' : 'text-ex-red')}>
+                  {formatOrderTotalDisplay(o.total, n => `₺${n.toLocaleString('tr-TR')}`)}
+                </Text>
               </View>
               {!readOnly && (
-              <View className="flex-row items-center gap-2 mt-3">
+              <View className="flex-row flex-wrap items-stretch gap-2 mt-3">
                 {o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'picked-up' && (
                   <Pressable
                     onPress={() => advance(o.id, o.status)}
                     disabled={updating === o.id}
-                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-ex-red active:bg-ex-redDark active:scale-[0.98] disabled:opacity-40"
+                    className="min-w-[140px] flex-grow flex-row items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-ex-red active:bg-ex-redDark disabled:opacity-40"
                   >
                     {updating === o.id
                       ? <View className="h-4 w-4 rounded-full border-2 border-white border-t-transparent" />
@@ -516,7 +594,7 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
                   <Pressable
                     onPress={() => advance(o.id, o.status)}
                     disabled={updating === o.id}
-                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-green-600 active:bg-green-700 active:scale-[0.98] disabled:opacity-40"
+                    className="min-w-[140px] flex-grow flex-row items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-green-600 active:bg-green-700 disabled:opacity-40"
                   >
                     {updating === o.id
                       ? <View className="h-4 w-4 rounded-full border-2 border-white border-t-transparent" />
@@ -526,7 +604,7 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
               </View>
               )}
             </View>
-          ))}
+          );})}
         </View>
       )}
     </View>

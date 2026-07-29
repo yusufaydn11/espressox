@@ -1,16 +1,9 @@
 import { ShoppingBag } from 'lucide-react';
 import { Card, EmptyState } from '../../lib/ui';
-import { formatTRY, formatDate } from '../../lib/utils';
+import { formatDate } from '../../lib/utils';
+import { formatOrderTotalDisplay, isFreeOrder } from '@shared/utils/orderDisplay';
+import { ORDER_STATUS_LABELS_ADMIN } from '@shared/constants/orders';
 import type { OrderRow } from '../../lib/supabase';
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Yeni',
-  preparing: 'Hazırlanıyor',
-  ready: 'Hazır',
-  'picked-up': 'Teslim Alındı',
-  delivered: 'Teslim Edildi',
-  cancelled: 'İptal',
-};
 
 export function OrderHistoryPanel({ orders }: { orders: OrderRow[] }) {
   return (
@@ -28,14 +21,22 @@ export function OrderHistoryPanel({ orders }: { orders: OrderRow[] }) {
       ) : (
         <div className="space-y-2 max-h-[420px] overflow-y-auto">
           {orders.map(o => (
-            <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-xl bg-cream-50 dark:bg-ink-800 border border-ink-50 dark:border-ink-700">
+            <div key={o.id} className={`flex items-center justify-between gap-3 py-2.5 px-3 rounded-xl border ${isFreeOrder(Number(o.total)) ? 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' : 'bg-cream-50 dark:bg-ink-800 border-ink-50 dark:border-ink-700'}`}>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink-900 dark:text-ink-100">#{o.order_number}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-ink-900 dark:text-ink-100">#{o.order_number}</p>
+                  {isFreeOrder(Number(o.total)) && (
+                    <span className="text-[9px] font-bold uppercase text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">Ücretsiz</span>
+                  )}
+                </div>
                 <p className="text-xs text-ink-400 truncate">
-                  {formatDate(o.created_at)} · {o.store_name || '—'} · {STATUS_LABELS[o.status] ?? o.status}
+                  {formatDate(o.created_at)} · {o.store_name || '—'} · {ORDER_STATUS_LABELS_ADMIN[o.status] ?? o.status}
+                  {o.points_earned > 0 ? ` · +${o.points_earned} puan` : ''}
                 </p>
               </div>
-              <p className="text-sm font-bold text-ink-900 dark:text-ink-100 shrink-0">{formatTRY(Number(o.total))}</p>
+              <p className={`text-sm font-bold shrink-0 ${isFreeOrder(Number(o.total)) ? 'text-green-700' : 'text-ink-900 dark:text-ink-100'}`}>
+                {formatOrderTotalDisplay(Number(o.total), n => `${n.toLocaleString('tr-TR')} ₺`)}
+              </p>
             </div>
           ))}
         </div>

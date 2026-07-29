@@ -62,15 +62,23 @@ async function signIn(email, password) {
   return { sb, session: data.session, error: null };
 }
 
+function createOrderArgs(overrides = {}) {
+  return {
+    p_items: overrides.p_items ?? [{ productId: 'h01', name: 'Test', qty: 1, price: 10 }],
+    p_total: overrides.p_total ?? 10,
+    p_store_id: overrides.p_store_id ?? null,
+    p_store_name: overrides.p_store_name ?? 'Smoke Store',
+    p_order_type: overrides.p_order_type ?? 'pickup',
+    p_payment_method: overrides.p_payment_method ?? 'card',
+    p_coupon_code: overrides.p_coupon_code ?? null,
+    p_benefit_type: overrides.p_benefit_type ?? null,
+    p_benefit_id: overrides.p_benefit_id ?? null,
+  };
+}
+
 async function testUnauthenticated() {
   const sb = createClient(url, anonKey, { auth: { persistSession: false } });
-  const { data, error } = await sb.rpc('create_order', {
-    p_items: [{ productId: 'latte', name: 'Latte', qty: 1, price: 10 }],
-    p_total: 99999,
-    p_store_id: null,
-    p_store_name: '',
-    p_order_type: 'pickup',
-  });
+  const { data, error } = await sb.rpc('create_order', createOrderArgs({ p_total: 99999 }));
   const err = data?.error ?? (error ? error.message : null);
   const blocked = err === 'unauthenticated' || (error?.message ?? '').toLowerCase().includes('jwt')
     || (error?.message ?? '').toLowerCase().includes('permission denied');
@@ -121,13 +129,10 @@ async function customerTests(sb) {
   record('customer', 'fetch product', 'PASS', product.id);
 
   const legitPrice = Number(product.price);
-  const { data: legit, error: legitErr } = await sb.rpc('create_order', {
+  const { data: legit, error: legitErr } = await sb.rpc('create_order', createOrderArgs({
     p_items: [{ productId: product.id, name: 'Smoke Test', qty: 1, price: legitPrice }],
     p_total: 999999,
-    p_store_id: null,
-    p_store_name: 'Smoke Store',
-    p_order_type: 'pickup',
-  });
+  }));
   if (legit?.error || legitErr) {
     record('customer', 'create_order valid item', 'FAIL', legit?.error ?? legitErr?.message);
     return;
@@ -158,13 +163,10 @@ async function customerTests(sb) {
     `total=${serverTotal} points=${points} (client p_total was 999999)`,
   );
 
-  const { data: tamper } = await sb.rpc('create_order', {
+  const { data: tamper } = await sb.rpc('create_order', createOrderArgs({
     p_items: [{ productId: product.id, name: 'Tamper', qty: 1, price: legitPrice + 500 }],
     p_total: legitPrice,
-    p_store_id: null,
-    p_store_name: 'Smoke Store',
-    p_order_type: 'pickup',
-  });
+  }));
   record(
     'customer',
     'create_order rejects price tamper',
@@ -174,6 +176,49 @@ async function customerTests(sb) {
 
   const { data: ownOrders } = await sb.from('orders').select('id').limit(1);
   record('customer', 'read own orders', ownOrders ? 'PASS' : 'FAIL');
+
+  const { data: benefits, error: benErr } = await sb.rpc('get_checkout_benefits', { p_store_id: null });
+  const v3Benefits = !benErr && benefits && benefits.benefits != null;
+  record(
+    'customer',
+    'get_checkout_benefits RPC',
+    v3Benefits ? 'PASS' : benErr ? 'NOT TESTED' : 'FAIL',
+    benErr?.message ?? (v3Benefits ? `${(benefits.benefits ?? []).length} benefits` : 'V3 migration not deployed'),
+  );
+
+  if (v3Benefits && product?.id) {
+    const { data: preview, error: prevErr } = await sb.rpc('preview_checkout', {
+      p_items: [{ productId: product.id, name: 'Preview', qty: 1, price: legitPrice }],
+      p_store_id: null,
+      p_coupon_code: null,
+      p_benefit_type: null,
+      p_benefit_id: null,
+    });
+    record(
+      'customer',
+      'preview_checkout RPC',
+      !prevErr && preview?.total != null ? 'PASS' : 'FAIL',
+      prevErr?.message ?? `total=${preview?.total}`,
+    );
+
+    if (legit?.order_number) {
+      const { data: pay } = await sb.rpc('record_order_payment', {
+        p_order_number: legit.order_number,
+        p_payment_status: 'paid',
+        p_transaction_id: 'smoke-test',
+        p_gateway: 'internal',
+        p_refund_amount: null,
+      });
+      record(
+        'customer',
+        'record_order_payment RPC',
+        pay?.error == null ? 'PASS' : 'FAIL',
+        pay?.error ?? pay?.payment_status ?? 'ok',
+      );
+    }
+  } else {
+    record('customer', 'preview_checkout RPC', 'NOT TESTED', 'awaiting V3 migration');
+  }
 }
 
 function qrScanDetail(data, rpcError) {
@@ -184,6 +229,10 @@ async function staffTests(sb, session) {
   const { data: role } = await sb.from('user_roles').select('role, store_id').eq('user_id', session.user.id).maybeSingle();
   record('staff', 'role is staff/store_manager', ['staff', 'store_manager'].includes(role?.role ?? '') ? 'PASS' : 'FAIL', role?.role ?? 'none');
 
+  const { data: kpis } = await sb.rpc('get_admin_dashboard_kpis');
+  const kpiBlocked = kpis?.error === 'unauthorized' || (!kpis?.today_sales && kpis?.error);
+  record('staff', 'HQ KPIs blocked', kpiBlocked ? 'PASS' : 'FAIL', kpis?.error ?? `today_sales=${kpis?.today_sales}`);
+
   if (role?.store_id) {
     const { data: orders, error } = await sb.from('orders').select('id').eq('store_id', role.store_id).limit(5);
     record('staff', 'read store orders', !error && orders ? 'PASS' : 'FAIL', error?.message);
@@ -191,11 +240,40 @@ async function staffTests(sb, session) {
     record('staff', 'read store orders', 'NOT TESTED', 'no store_id on role');
   }
 
+  const { data: qr, error: qrErr } = await sb
+    .from('qr_codes')
+    .select('id, code')
+    .eq('is_active', true)
+    .neq('user_id', session.user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (qrErr || !qr?.id) {
+    record('staff', 'qr_scan requires store_id', 'NOT TESTED', qrErr?.message ?? 'no accessible customer QR');
+    return;
+  }
+
+  if (qr.code) {
+    const { data: lookup } = await sb.rpc('lookup_qr_for_scan', { p_code: qr.code });
+    record(
+      'staff',
+      'lookup_qr_for_scan',
+      lookup?.id === qr.id ? 'PASS' : 'FAIL',
+      lookup?.error ?? lookup?.code ?? 'mismatch',
+    );
+  }
+
+  const { data: scanNoStore, error: rpcError } = await sb.rpc('qr_scan', {
+    p_qr_code_id: qr.id,
+    p_store_id: null,
+    p_action: 'stamp',
+    p_points: 0,
+  });
   record(
     'staff',
     'qr_scan requires store_id',
-    'NOT TESTED',
-    'staff RLS cannot read customer QR codes; test moved to admin',
+    scanNoStore?.error === 'store_required' ? 'PASS' : 'FAIL',
+    qrScanDetail(scanNoStore, rpcError),
   );
 }
 
@@ -306,6 +384,14 @@ async function superAdminTests(sb) {
 
   const { data: products } = await sb.from('products').select('id').limit(1);
   record('super_admin', 'read products catalog', products ? 'PASS' : 'FAIL');
+
+  const { data: costs, error: costsErr } = await sb.rpc('get_hq_benefit_costs', { p_days: 7 });
+  record(
+    'super_admin',
+    'get_hq_benefit_costs RPC',
+    !costsErr && costs?.error == null ? 'PASS' : costsErr ? 'NOT TESTED' : 'FAIL',
+    costsErr?.message ?? (costs ? 'ok' : 'V3 migration not deployed'),
+  );
 }
 
 async function main() {

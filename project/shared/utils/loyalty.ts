@@ -54,9 +54,10 @@ export function computeStampProgress(
   stampCount: number,
   cardSize: number = STAMP_CARD_SIZE,
 ): { freeCoffees: number; currentStamps: number } {
+  const mod = stampCount % cardSize;
   return {
     freeCoffees: Math.floor(stampCount / cardSize),
-    currentStamps: stampCount % cardSize,
+    currentStamps: stampCount > 0 && mod === 0 ? cardSize : mod,
   };
 }
 

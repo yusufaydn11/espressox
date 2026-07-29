@@ -14,6 +14,7 @@ interface AuthContextValue {
   storeId: string | null;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -77,6 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null); setProfile(null); setRoles([]); setRolesLoaded(false);
@@ -89,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = primaryRole !== null;
 
   return (
-    <AuthContext.Provider value={{ loading, rolesLoaded, user, profile, roles, primaryRole, storeId, isAdmin, signIn, signOut, refresh }}>
+    <AuthContext.Provider value={{ loading, rolesLoaded, user, profile, roles, primaryRole, storeId, isAdmin, signIn, resetPassword, signOut, refresh }}>
       {children}
     </AuthContext.Provider>
   );

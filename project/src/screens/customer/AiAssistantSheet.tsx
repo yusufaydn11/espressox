@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, TextInput as RNTextInput, ScrollView } from 'react-native';
 import { Sparkles, Send, Coffee, Cake, TrendingUp, Lightbulb } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { Sheet } from '@/components/ui/Sheet';
-import { AI_CHAT, AI_SUGGESTIONS } from '@/data';
-import { useProducts } from '@/lib/hooks';
-import { mapRetailDbProductsToUi } from '@shared/utils/products';
+import { useProducts, useOrders } from '@/lib/hooks';
+import { mapRetailDbProductsToUi, filterRetailPopularProducts } from '@shared/utils/products';
 import type { RetailProductDbRow } from '@shared/types/products';
 import { cn } from '@/lib/utils';
 
@@ -13,20 +13,42 @@ interface Msg { role: 'ai' | 'user'; text: string; }
 
 const quickActions = [
   { label: 'Kahve öner', icon: Coffee },
-  { label: 'Tatlı eşleştir', icon: Cake },
-  { label: 'Alışkanlık analiz et', icon: TrendingUp },
+  { label: 'Popüler ürünler', icon: TrendingUp },
   { label: 'Beni şaşırt', icon: Lightbulb },
+  { label: 'Tatlı eşleştir', icon: Cake },
 ];
 
+const GREETING = 'Merhaba! Menüden gerçek ürünleri inceleyebilir, popüler içecekleri önerebilirim. Ne içmek istersin?';
+
 export function AiAssistantSheet() {
-  const { sheet, closeSheet, setSelectedProduct, openSheet } = useApp();
+  const { sheet, closeSheet, setSelectedProduct, openSheet, points } = useApp();
+  const { profile } = useAuth();
   const open = sheet === 'ai';
-  const { data: dbProducts } = useProducts();
-  const [messages, setMessages] = useState<Msg[]>(AI_CHAT);
+  const { data: dbProducts, loading: productsLoading } = useProducts();
+  const { data: orders } = useOrders();
+  const [messages, setMessages] = useState<Msg[]>([{ role: 'ai', text: GREETING }]);
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
-  const products = mapRetailDbProductsToUi((dbProducts ?? []) as RetailProductDbRow[]);
+  const products = useMemo(
+    () => mapRetailDbProductsToUi((dbProducts ?? []) as RetailProductDbRow[]),
+    [dbProducts],
+  );
+  const popular = useMemo(() => filterRetailPopularProducts(products).slice(0, 4), [products]);
+
+  const suggestions = useMemo(() => popular.map((p, i) => ({
+    id: p.id,
+    text: `${p.name} — ₺${p.price.toLocaleString('tr-TR')}`,
+    productId: p.id,
+    confidence: 95 - i * 5,
+  })), [popular]);
+
+  useEffect(() => {
+    if (open) {
+      setMessages([{ role: 'ai', text: GREETING }]);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -36,19 +58,33 @@ export function AiAssistantSheet() {
 
   const aiRespond = (userText: string): string => {
     const lower = userText.toLowerCase();
-    if (lower.includes('kahve') || lower.includes('içecek') || lower.includes('öner')) {
-      return `Sabah rutinine ve çiçeksi notlara olan sevgine göre, Rose Latte öneririm — bunu 9 kez sipariş ettin ve 5 yıldız verdin. Küçük ₺240, Büyük ₺250. Siparişine ekleyeyim mi?`;
-    }
-    if (lower.includes('tatlı') || lower.includes('eşleştir') || lower.includes('kek') || lower.includes('pasta')) {
-      return `Tiramisu, her zamanki espressonla harika eşleşir — kremsi yapısı gül aromasını tamamlar. ₺165 ve bir misafir favorisi. Ekleyeyim mi?`;
+    if (productsLoading) return 'Menü yükleniyor, bir saniye…';
+    if (products.length === 0) return 'Şu an menüde ürün bulunamadı. Lütfen daha sonra tekrar dene.';
+
+    if (lower.includes('kahve') || lower.includes('içecek') || lower.includes('öner') || lower.includes('popüler')) {
+      const pick = popular[0] ?? products[0];
+      return pick
+        ? `Sana ${pick.name} öneririm — ₺${pick.price.toLocaleString('tr-TR')}. Menüden eklemek ister misin?`
+        : 'Menüden bir ürün seçebilirsin.';
     }
     if (lower.includes('alışkanlık') || lower.includes('analiz')) {
-      return `Profilin şu şekilde: Çoğunlukla hafta içleri 09:00'dan önce sipariş veriyorsun (%78), yulaf sütü tercih ediyorsun ve ilk 3 içeceğin Rose Latte, Americano ve Matcha Tea Latte. Ortalama sepetin ₺245 — ortalamadan %18 yukarıda. Altın seviyedesin ve 14 günlük serin var!`;
+      const orderCount = orders?.length ?? 0;
+      const name = profile?.full_name?.split(' ')[0] ?? 'Üye';
+      return `${name}, ${orderCount} siparişin var ve ${points} sadakat puanın bulunuyor. ${profile?.tier ?? 'Bronz'} seviyesindesin.`;
     }
     if (lower.includes('şaşırt') || lower.includes('sürpriz')) {
-      return `Sürpriz! Bugün sana ekstra shot ve pistachio cream kremalı Pistachio Creamy hazırlardım — Küçük ₺220'de sınırlı bir zevk. Henüz denemediğin bir misafir favorisi. Ekleyeyim mi?`;
+      const pick = products[Math.floor(Math.random() * Math.min(products.length, 8))];
+      return pick
+        ? `Sürpriz önerim: ${pick.name} — ₺${pick.price.toLocaleString('tr-TR')}. Dene bakalım!`
+        : 'Menüye göz at, harika seçenekler var.';
     }
-    return `Senin kişisel kahve küratörünüm. İçecek önerebilir, tatlı eşleştirebilir, alışkanlıklarını analiz edebilir veya her an için mükemmel seçimi bulabilirim. Ne dersin?`;
+    if (lower.includes('tatlı') || lower.includes('eşleştir')) {
+      const dessert = products.find(p => /tatlı|pasta|kruvasan|tiramisu/i.test(p.name)) ?? products[0];
+      return dessert
+        ? `${dessert.name} (₺${dessert.price.toLocaleString('tr-TR')}) kahvenle güzel gider.`
+        : 'Menüden tatlı kategorisine bakabilirsin.';
+    }
+    return 'Kahve öner, popüler ürünleri sor veya "beni şaşırt" de — hepsi gerçek menüden.';
   };
 
   const send = (text: string) => {
@@ -59,13 +95,11 @@ export function AiAssistantSheet() {
     setTimeout(() => {
       const aiMsg: Msg = { role: 'ai', text: aiRespond(text) };
       setMessages(m => [...m, aiMsg]);
-    }, 700);
+    }, 500);
   };
 
-  const handleSuggestion = (suggestionId: string) => {
-    const s = AI_SUGGESTIONS.find(x => x.id === suggestionId);
-    if (!s) return;
-    const product = products.find(p => p.id === s.product);
+  const handleSuggestion = (productId: string) => {
+    const product = products.find(p => p.id === productId);
     if (product) {
       closeSheet();
       setSelectedProduct(product);
@@ -83,7 +117,7 @@ export function AiAssistantSheet() {
           <Text className="text-lg font-semibold text-ink-900">AI Barista</Text>
           <View className="flex-row items-center gap-1 mt-0.5">
             <View className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            <Text className="text-[11px] text-green-600">Senin kişisel kahve küratörün</Text>
+            <Text className="text-[11px] text-green-600">Canlı menü önerileri</Text>
           </View>
         </View>
       </View>
@@ -101,20 +135,20 @@ export function AiAssistantSheet() {
             </View>
           ))}
 
-          {messages.length <= 4 && (
+          {suggestions.length > 0 && (
             <View className="gap-2 pt-2">
-              <Text className="text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Akıllı öneriler</Text>
-              {AI_SUGGESTIONS.map(s => (
+              <Text className="text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Popüler ürünler</Text>
+              {suggestions.map(s => (
                 <Pressable
                   key={s.id}
-                  onPress={() => handleSuggestion(s.id)}
+                  onPress={() => handleSuggestion(s.productId)}
                   className="p-3 rounded-2xl border border-ex-red/20 bg-red-50 active:opacity-80"
                 >
                   <View className="flex-row items-start gap-2">
                     <Sparkles size={14} color="#C8102E" />
                     <View className="flex-1">
                       <Text className="text-xs text-ink-700 leading-relaxed">{s.text}</Text>
-                      <Text className="text-[10px] text-ex-red mt-1 font-medium">%{s.confidence} eşleşme · Sipariş etmek için dokun</Text>
+                      <Text className="text-[10px] text-ex-red mt-1 font-medium">Sipariş etmek için dokun</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -148,7 +182,7 @@ export function AiAssistantSheet() {
         />
         <Pressable
           onPress={() => send(input)}
-          className="h-11 w-11 rounded-2xl bg-ex-red items-center justify-center shrink-0 shadow-red active:scale-105"
+          className="h-11 w-11 rounded-2xl bg-ex-red items-center justify-center shrink-0 shadow-red"
         >
           <Send size={17} color="#fff" />
         </Pressable>

@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Image } from 'react-native';
-import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, Pressable, Image, TextInput as RNTextInput } from 'react-native';
+import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin, Tag, Gift } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
+import { fetchOrderByNumber } from '@/services/orders/orderService';
+import { fetchCheckoutBenefits, previewCheckout, type CheckoutBenefit, type CheckoutPreview } from '@/services/checkout/checkoutService';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { formatPrice, cn } from '@/lib/utils';
 import { useStores, useCreateOrder } from '@/lib/hooks';
 import type { OrderType } from '@/types';
@@ -20,6 +22,13 @@ const ORDER_ERROR_LABELS: Record<string, string> = {
   product_unavailable: 'Ürün mevcut değil veya stokta yok.',
   price_tamper: 'Fiyat doğrulaması başarısız.',
   invalid_total: 'Geçersiz sipariş tutarı.',
+  coupon_not_found: 'Kupon bulunamadı.',
+  coupon_expired: 'Kupon süresi dolmuş.',
+  coupon_min_order: 'Minimum sepet tutarı karşılanmıyor.',
+  coupon_user_limit: 'Bu kuponu daha önce kullandınız.',
+  insufficient_stamps: 'Yeterli damga yok.',
+  reward_not_available: 'Ödül kullanılamıyor.',
+  tier_benefit_not_available: 'Seviye avantajı kullanılamıyor.',
 };
 
 function formatOrderError(code: string): string {
@@ -101,11 +110,51 @@ export function CheckoutSheet() {
   const [store, setStore] = useState('');
   const [payment, setPayment] = useState('card');
   const [placing, setPlacing] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [benefits, setBenefits] = useState<CheckoutBenefit[]>([]);
+  const [selectedBenefit, setSelectedBenefit] = useState<CheckoutBenefit | null>(null);
+  const [preview, setPreview] = useState<CheckoutPreview | null>(null);
   const { data: stores } = useStores();
   const createOrder = useCreateOrder();
 
   const storeList = stores ?? [];
   const selectedStore = storeList.find(s => s.id === store) ?? storeList[0];
+
+  const orderItems = cart.map(item => ({
+    name: `${item.product.name} — ${item.size.label}${item.milk.id !== 'whole' ? ', ' + item.milk.label : ''}`,
+    qty: item.quantity, price: item.unitPrice, productId: item.product.id,
+  }));
+
+  const loadPreview = useCallback(async () => {
+    if (!selectedStore || cart.length === 0) return;
+    const items = cart.map(item => ({
+      name: `${item.product.name} — ${item.size.label}${item.milk.id !== 'whole' ? ', ' + item.milk.label : ''}`,
+      qty: item.quantity, price: item.unitPrice, productId: item.product.id,
+    }));
+    const { preview: p } = await previewCheckout({
+      items,
+      storeId: selectedStore.id,
+      couponCode: couponCode.trim() || null,
+      benefitType: selectedBenefit?.type ?? null,
+      benefitId: selectedBenefit?.id ?? null,
+    });
+    setPreview(p);
+  }, [cart, selectedStore, couponCode, selectedBenefit]);
+
+  useEffect(() => {
+    if (!open || !selectedStore) return;
+    void fetchCheckoutBenefits(selectedStore.id).then(({ benefits: b }) => setBenefits(b));
+  }, [open, selectedStore]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => { void loadPreview(); }, 300);
+    return () => clearTimeout(t);
+  }, [open, loadPreview]);
+
+  const displayTotal = preview?.total ?? cartTotal;
+  const displayDiscount = preview?.discount ?? 0;
+  const displayPoints = preview?.pointsEarned ?? 0;
 
   const orderTypes = [
     { id: 'pickup' as const, label: 'Gel-Al', icon: Store, desc: 'Al & götür' },
@@ -125,20 +174,27 @@ export function CheckoutSheet() {
       return;
     }
     setPlacing(true);
-    const { error, orderNumber, pointsEarned } = await createOrder({
-      items: cart.map(item => ({
-        name: `${item.product.name} — ${item.size.label}${item.milk.id !== 'whole' ? ', ' + item.milk.label : ''}`,
-        qty: item.quantity, price: item.unitPrice, productId: item.product.id,
-      })),
-      total: cartTotal, storeId: selectedStore.id, storeName: selectedStore.name, orderType,
+    const { error, orderNumber, pointsEarned, total, billingType, benefitTitle } = await createOrder({
+      items: orderItems,
+      total: cartTotal,
+      storeId: selectedStore.id,
+      storeName: selectedStore.name,
+      orderType,
+      paymentMethod: payment,
+      couponCode: couponCode.trim() || null,
+      benefitType: selectedBenefit?.type ?? null,
+      benefitId: selectedBenefit?.id ?? null,
     });
     setPlacing(false);
     if (error) { showToast('Sipariş başarısız: ' + formatOrderError(error)); return; }
     setLastOrder({
       orderNumber: orderNumber ?? '—',
       storeName: selectedStore.name,
-      status: 'preparing',
+      status: payment === 'cash' ? 'payment_pending' : 'confirmed',
       pointsEarned: pointsEarned ?? 0,
+      total: total ?? displayTotal,
+      billingType,
+      benefitTitle,
     });
     clearCart();
     showToast('Sipariş alındı! Puan kazanıyorsun…');
@@ -201,6 +257,44 @@ export function CheckoutSheet() {
         </View>
       )}
 
+      {benefits.length > 0 && (
+        <View className="mb-5">
+          <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">Avantaj / Ödül</Text>
+          <View className="gap-2">
+            <SelectCard selected={!selectedBenefit} onPress={() => setSelectedBenefit(null)}>
+              <Gift size={16} color={!selectedBenefit ? '#C8102E' : '#9494A0'} />
+              <View className="flex-1"><Text className="text-sm font-medium text-ink-900">Avantaj kullanma</Text></View>
+              {!selectedBenefit && <Check size={16} color="#C8102E" />}
+            </SelectCard>
+            {benefits.map(b => (
+              <SelectCard key={`${b.type}-${b.id}`} selected={selectedBenefit?.id === b.id} onPress={() => setSelectedBenefit(b)}>
+                <Sparkles size={16} color={selectedBenefit?.id === b.id ? '#C8102E' : '#9494A0'} />
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-ink-900">{b.title}</Text>
+                  {b.detail ? <Text className="text-[11px] text-ink-400">{b.detail}</Text> : null}
+                </View>
+                {selectedBenefit?.id === b.id && <Check size={16} color="#C8102E" />}
+              </SelectCard>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <View className="mb-5">
+        <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">Kupon kodu</Text>
+        <View className="flex-row items-center gap-3 px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+          <Tag size={16} color="#9494A0" />
+          <RNTextInput
+            value={couponCode}
+            onChangeText={setCouponCode}
+            placeholder="Kupon kodunu gir"
+            placeholderTextColor="#9494A0"
+            autoCapitalize="characters"
+            className="flex-1 text-sm text-ink-900"
+          />
+        </View>
+      </View>
+
       <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">Ödeme yöntemi</Text>
       <View className="gap-2 mb-5">
         {[
@@ -219,32 +313,60 @@ export function CheckoutSheet() {
         ))}
       </View>
 
-      <View className="flex-row justify-between pt-3 border-t border-ink-100 mb-5">
-        <Text className="text-sm font-semibold text-ink-900">Toplam</Text>
-        <Text className="text-sm font-semibold text-ink-900">{formatPrice(cartTotal)}</Text>
+      <View className="gap-2 mb-5">
+        <View className="flex-row justify-between"><Text className="text-sm text-ink-500">Ara toplam</Text><Text className="text-sm text-ink-500">{formatPrice(preview?.subtotal ?? cartTotal)}</Text></View>
+        {displayDiscount > 0 && (
+          <View className="flex-row justify-between"><Text className="text-sm text-green-600">İndirim</Text><Text className="text-sm text-green-600">−{formatPrice(displayDiscount)}</Text></View>
+        )}
+        {displayPoints > 0 && (
+          <View className="flex-row justify-between"><Text className="text-sm text-ink-500">Kazanılacak puan</Text><Text className="text-sm text-ex-red font-medium">+{displayPoints}</Text></View>
+        )}
+        <View className="flex-row justify-between pt-2 border-t border-ink-100"><Text className="text-sm font-semibold text-ink-900">Toplam</Text><Text className="text-sm font-semibold text-ink-900">{formatPrice(displayTotal)}</Text></View>
       </View>
 
       <Button variant="gold" size="lg" full onPress={placeOrder} disabled={placing || cart.length === 0}>
-        {placing ? 'Sipariş alınıyor…' : `Sipariş ver · ${formatPrice(cartTotal)}`}
+        {placing ? 'Sipariş alınıyor…' : `Sipariş ver · ${formatPrice(displayTotal)}`}
       </Button>
     </Sheet>
   );
 }
 
 export function TrackingSheet() {
-  const { sheet, closeSheet, lastOrder } = useApp();
+  const { sheet, closeSheet, lastOrder, setLastOrder } = useApp();
   const open = sheet === 'tracking';
+  const status = lastOrder?.status ?? 'preparing';
 
-  const statusTitle = lastOrder?.status === 'preparing' ? 'Hazırlanıyor'
-    : lastOrder?.status === 'ready' ? 'Hazır'
-    : lastOrder?.status === 'delivered' ? 'Teslim Edildi'
+  useEffect(() => {
+    if (!open || !lastOrder?.orderNumber) return;
+    const poll = () => {
+      void fetchOrderByNumber(lastOrder.orderNumber).then(({ data }) => {
+        if (!data) return;
+        setLastOrder({
+          orderNumber: data.order_number,
+          storeName: data.store_name,
+          status: data.status,
+          pointsEarned: data.points_earned,
+        });
+      });
+    };
+    poll();
+    const id = setInterval(poll, 8000);
+    return () => clearInterval(id);
+  }, [open, lastOrder?.orderNumber, setLastOrder]);
+
+  const statusTitle = status === 'preparing' ? 'Hazırlanıyor'
+    : status === 'ready' ? 'Hazır'
+    : status === 'picked-up' ? 'Teslim Alındı'
+    : status === 'delivered' ? 'Teslim Edildi'
     : 'Sipariş Alındı';
+
+  const stepIndex = ['preparing', 'ready', 'picked-up', 'delivered'].indexOf(status);
 
   const steps = [
     { label: 'Sipariş alındı', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
-    { label: 'Hazırlanıyor', desc: 'Barista ekibimiz hazırlıyor', done: true, current: lastOrder?.status === 'preparing' },
-    { label: 'Alış için hazır', desc: 'Hazır olunca bildirim alacaksın', done: false },
-    { label: 'Afiyet olsun!', desc: 'Yudumla & tadını çıkar', done: false },
+    { label: 'Hazırlanıyor', desc: 'Barista ekibimiz hazırlıyor', done: stepIndex >= 0, current: status === 'preparing' },
+    { label: 'Alış için hazır', desc: 'Hazır olunca bildirim alacaksın', done: stepIndex >= 1, current: status === 'ready' },
+    { label: 'Teslim edildi', desc: lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan yüklendi` : 'Afiyet olsun!', done: stepIndex >= 3, current: status === 'delivered' || status === 'picked-up' },
   ];
 
   return (
@@ -280,10 +402,10 @@ export function TrackingSheet() {
         ))}
       </View>
 
-      <View className="mt-6 flex-row gap-3">
-        <Button variant="outline" full onPress={closeSheet}>Kapat</Button>
-        <Button variant="gold" full>Mağazayla iletişim <ChevronRight size={16} /></Button>
-      </View>
+      <ButtonRow className="mt-6">
+        <Button variant="outline" flex onPress={closeSheet}>Kapat</Button>
+        <Button variant="gold" flex onPress={closeSheet}>Mağazayla iletişim <ChevronRight size={16} /></Button>
+      </ButtonRow>
     </Sheet>
   );
 }

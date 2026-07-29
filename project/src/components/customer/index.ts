@@ -3,3 +3,8 @@ export { CustomerEmptyState, CustomerEmptyCard } from './CustomerEmptyState';
 export { HomeHero } from './HomeHero';
 export { ProductCarousel } from './ProductCarousel';
 export { HomeQuickLink, HomeSectionHeader } from './HomeSections';
+export { PageHeader } from './PageHeader';
+export { ThemeCanvas } from './ThemeCanvas';
+export { ScreenWrapper, SCREEN } from './ScreenWrapper';
+export { SectionLabel, FieldLabel } from './SectionLabel';
+export { QrCodeImage } from './QrCodeImage';

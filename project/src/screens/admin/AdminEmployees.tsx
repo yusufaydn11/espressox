@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { Plus, Mail, Phone, Clock, Edit2, Trash2, UserCog } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select } from '@/components/ui/Modal';
 import { useAdmin, genId } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
@@ -33,8 +33,11 @@ export function AdminEmployees() {
   const closeForm = () => { setEditing(null); setCreating(false); };
   const save = () => {
     if (!form.name.trim()) return;
-    if (creating) addEmployee(form); else if (editing) updateEmployee(editing.id, form);
-    closeForm();
+    void (async () => {
+      if (creating) await addEmployee(form);
+      else if (editing) await updateEmployee(editing.id, form);
+      closeForm();
+    })();
   };
   const set = <K extends keyof Employee>(k: K, v: Employee[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -69,7 +72,7 @@ export function AdminEmployees() {
               <View>
                 <Pressable onPress={() => {
                   const next: Record<string, Employee['status']> = { active: 'break', break: 'off', off: 'active' };
-                  updateEmployee(emp.id, { status: next[emp.status] });
+                  void updateEmployee(emp.id, { status: next[emp.status] });
                 }}>
                   <Text className={cn('px-2.5 py-1 rounded-full text-[10px] font-bold uppercase', statusColors[emp.status])}>{statusLabels[emp.status]}</Text>
                 </Pressable>
@@ -113,10 +116,10 @@ export function AdminEmployees() {
           </FormField>
           <FormField label="Vardiya saatleri"><TextInput value={form.shift} onChangeText={v => set('shift', v)} placeholder="08:00 – 16:00" /></FormField>
           <FormField label="Avatar URL"><TextInput value={form.avatar} onChangeText={v => set('avatar', v)} placeholder="https://…" /></FormField>
-          <View className="flex-row gap-3 pt-2">
-            <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" full onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
-          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
+          </ButtonRow>
         </View>
       </Modal>
 

@@ -1,29 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput as RNTextInput } from 'react-native';
 import { Search, Coffee, UtensilsCrossed, Store as StoreIcon, CalendarClock, Edit2, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, Select } from '@/components/ui/Modal';
 import { useAdmin, type AdminOrder } from '@/context/AdminContext';
+import { fetchFreeCoffeeRedemptions } from '@/services/loyalty';
+import { supabase } from '@/lib/supabase';
+import { OrderBenefitBadge } from '@/components/orders/OrderBenefitBadge';
+import { resolveOrderBenefit } from '@shared/utils/orderBenefits';
 import { cn } from '@/lib/utils';
+import {
+  ORDER_STATUS_LABELS_ADMIN,
+  ORDER_STATUS_CHIP_CLASSES,
+} from '@shared/constants/orders';
+import { formatOrderTotalDisplay } from '@shared/utils/orderDisplay';
 
 const typeIcons: Record<string, typeof Coffee> = { pickup: StoreIcon, table: UtensilsCrossed, delivery: Coffee, scheduled: CalendarClock };
 const typeLabels: Record<string, string> = { pickup: 'Gel-Al', table: 'Masa', delivery: 'Teslimat', scheduled: 'Planlı' };
 
-const orderStatuses = ['Hazırlanıyor', 'Hazır', 'Teslim Edildi', 'Teslim Alındı', 'İptal Edildi'];
+const ORDER_STATUSES = ['preparing', 'ready', 'picked-up', 'delivered', 'cancelled'] as const;
 
-const statusColors: Record<string, string> = {
-  'Hazırlanıyor': 'bg-red-50 text-ex-red',
-  'Hazır': 'bg-green-100 text-green-700',
-  'Teslim Edildi': 'bg-ink-100 text-ink-500',
-  'Teslim Alındı': 'bg-ink-100 text-ink-500',
-  'İptal Edildi': 'bg-red-100 text-ex-red',
-};
-
-const filterMap: Record<string, string> = { all: 'Tümü', preparing: 'Hazırlanıyor', ready: 'Hazır', delivered: 'Teslim Edildi' };
-const statusToFilter: Record<string, string> = {
-  'Hazırlanıyor': 'preparing', 'Hazır': 'ready',
-  'Teslim Edildi': 'delivered', 'Teslim Alındı': 'delivered',
+const filterMap: Record<string, string> = {
+  all: 'Tümü',
+  preparing: ORDER_STATUS_LABELS_ADMIN.preparing,
+  ready: ORDER_STATUS_LABELS_ADMIN.ready,
+  'picked-up': ORDER_STATUS_LABELS_ADMIN['picked-up'],
+  delivered: ORDER_STATUS_LABELS_ADMIN.delivered,
+  cancelled: ORDER_STATUS_LABELS_ADMIN.cancelled,
 };
 
 export function AdminOrders() {
@@ -33,11 +37,27 @@ export function AdminOrders() {
   const [editing, setEditing] = useState<AdminOrder | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [statusField, setStatusField] = useState('');
+  const [opCtx, setOpCtx] = useState<Parameters<typeof resolveOrderBenefit>[1] | null>(null);
 
-  const filters = ['all', 'preparing', 'ready', 'delivered'];
+  useEffect(() => {
+    void (async () => {
+      const [fcr, red, rew] = await Promise.all([
+        fetchFreeCoffeeRedemptions({ limit: 200 }),
+        supabase.from('reward_redemptions').select('*').order('redeemed_at', { ascending: false }).limit(200),
+        supabase.from('rewards').select('id, title, category, points_cost'),
+      ]);
+      setOpCtx({
+        freeCoffees: fcr.data ?? [],
+        redemptions: red.data ?? [],
+        rewards: rew.data ?? [],
+      });
+    })();
+  }, []);
+
+  const filters = ['all', ...ORDER_STATUSES];
 
   const filtered = orders.filter(o => {
-    if (filter !== 'all' && statusToFilter[o.status] !== filter) return false;
+    if (filter !== 'all' && o.status !== filter) return false;
     if (query && !o.customer.toLowerCase().includes(query.toLowerCase()) && !o.id.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
@@ -63,7 +83,7 @@ export function AdminOrders() {
             'px-4 py-2.5 rounded-2xl border',
             filter === f ? 'bg-ink-900 border-ink-900' : 'bg-white border-ink-100',
           )}>
-            <Text className={cn('text-xs font-medium', filter === f ? 'text-white' : 'text-ink-700')}>{filterMap[f]}</Text>
+            <Text className={cn('text-xs font-medium', filter === f ? 'text-white' : 'text-ink-700')}>{filterMap[f] ?? f}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -80,6 +100,12 @@ export function AdminOrders() {
             </View>
             {filtered.map(o => {
               const Icon = typeIcons[o.type] ?? Coffee;
+              const benefit = opCtx ? resolveOrderBenefit(
+                { total: o.total, points_earned: 0, user_id: o.user_id, created_at: o.created_at },
+                opCtx as Parameters<typeof resolveOrderBenefit>[1],
+              ) : null;
+              const statusLabel = ORDER_STATUS_LABELS_ADMIN[o.status] ?? o.status;
+              const statusStyle = ORDER_STATUS_CHIP_CLASSES[o.status] ?? 'bg-ink-100 text-ink-600';
               return (
                 <View key={o.id} className="flex-row border-b border-ink-100 px-2 items-center">
                   <View className="px-3 py-3.5 min-w-[80px]"><Text className="text-xs font-semibold text-ink-900">{o.id}</Text></View>
@@ -87,8 +113,13 @@ export function AdminOrders() {
                   <View className="px-3 py-3.5 min-w-[80px]"><View className="flex-row items-center gap-1.5"><Icon size={13} color="#3D3D42" /><Text className="text-xs text-ink-700">{typeLabels[o.type] ?? o.type}</Text></View></View>
                   <View className="px-3 py-3.5 min-w-[80px]"><Text className="text-xs text-ink-500" numberOfLines={1}>{o.store}</Text></View>
                   <View className="px-3 py-3.5 min-w-[50px]"><Text className="text-xs text-ink-700">{o.items}</Text></View>
-                  <View className="px-3 py-3.5 min-w-[70px]"><Text className="text-sm font-semibold text-ex-red">₺{o.total}</Text></View>
-                  <View className="px-3 py-3.5 min-w-[100px]"><View className={cn('px-2.5 py-1 rounded-full', statusColors[o.status] ?? 'bg-ink-100')}><Text className={cn('text-[10px] font-bold uppercase', statusColors[o.status]?.includes('ex-red') ? 'text-ex-red' : statusColors[o.status]?.includes('green') ? 'text-green-700' : 'text-ink-500')}>{o.status}</Text></View></View>
+                  <View className="px-3 py-3.5 min-w-[100px]">
+                    {benefit && benefit.kind !== 'paid' && <OrderBenefitBadge benefit={benefit} compact />}
+                    <Text className={cn('text-sm font-semibold', benefit && benefit.kind !== 'paid' ? 'text-green-700' : 'text-ex-red')}>
+                      {formatOrderTotalDisplay(o.total, n => `₺${n.toLocaleString('tr-TR')}`)}
+                    </Text>
+                  </View>
+                  <View className="px-3 py-3.5 min-w-[100px]"><View className={cn('px-2.5 py-1 rounded-full', statusStyle.split(' ')[0] ?? 'bg-ink-100')}><Text className={cn('text-[10px] font-bold uppercase', statusStyle.split(' ').slice(1).join(' ') || 'text-ink-500')}>{statusLabel}</Text></View></View>
                   <View className="px-3 py-3.5 min-w-[60px]"><Text className="text-xs text-ink-400">{o.time}</Text></View>
                   <View className="px-3 py-3.5 min-w-[70px] flex-row items-center gap-1.5">
                     <Pressable onPress={() => openEdit(o)} className="h-7 w-7 rounded-lg bg-ink-100 items-center justify-center"><Edit2 size={13} color="#6E6E78" /></Pressable>
@@ -109,15 +140,19 @@ export function AdminOrders() {
             <View className="p-3 rounded-xl bg-cream-100">
               <Text className="text-xs text-ink-400">Sipariş</Text>
               <Text className="text-sm font-semibold text-ink-900">{editing.id} — {editing.customer}</Text>
-              <Text className="text-xs text-ink-500 mt-1">{editing.items} ürün · ₺{editing.total} · {editing.store}</Text>
+              <Text className="text-xs text-ink-500 mt-1">{editing.items} ürün · {formatOrderTotalDisplay(editing.total, n => `₺${n.toLocaleString('tr-TR')}`)} · {editing.store}</Text>
             </View>
             <FormField label="Durum">
-              <Select value={statusField} onValueChange={setStatusField} options={orderStatuses.map(s => ({ label: s, value: s }))} />
+              <Select
+                value={statusField}
+                onValueChange={setStatusField}
+                options={ORDER_STATUSES.map(s => ({ label: ORDER_STATUS_LABELS_ADMIN[s] ?? s, value: s }))}
+              />
             </FormField>
-            <View className="flex-row gap-3">
-              <Button variant="outline" full onPress={() => setEditing(null)}>Vazgeç</Button>
-              <Button variant="gold" full onPress={saveEdit}>Kaydet</Button>
-            </View>
+            <ButtonRow>
+              <Button variant="outline" flex onPress={() => setEditing(null)}>Vazgeç</Button>
+              <Button variant="gold" flex onPress={saveEdit}>Kaydet</Button>
+            </ButtonRow>
           </View>
         )}
       </Modal>

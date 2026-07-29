@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonRow } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select, Toggle } from '@/components/ui/Modal';
 import { useAdmin, genId } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
@@ -114,10 +114,10 @@ export function AdminStores() {
             <Toggle checked={form.parking} onChange={v => set('parking', v)} label="Otopark" />
             <Toggle checked={form.drive_thru} onChange={v => set('drive_thru', v)} label="Drive-thru" />
           </View>
-          <View className="flex-row gap-3 pt-2">
-            <Button variant="outline" full onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" full onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
-          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
+          </ButtonRow>
         </View>
       </Modal>
 

@@ -342,9 +342,9 @@ function PaymentSheet({ selectedMethod, onSelectMethod, onCancel, onPay, paying,
           );
         })}
       </View>
-      <View className="flex-row gap-2">
-        <Pressable onPress={onCancel} className="flex-1 py-2.5 rounded-xl bg-ink-50 items-center"><Text className="text-sm font-medium text-ink-600">Vazgeç</Text></Pressable>
-        <Pressable onPress={onPay} disabled={paying} className="flex-[2] flex-row items-center justify-center gap-2 py-2.5 rounded-xl bg-ex-red disabled:opacity-40">
+      <View className="flex-row items-stretch gap-2">
+        <Pressable onPress={onCancel} className="flex-1 min-w-0 py-2.5 rounded-xl bg-ink-50 items-center justify-center"><Text className="text-sm font-medium text-ink-600">Vazgeç</Text></Pressable>
+        <Pressable onPress={onPay} disabled={paying} className="flex-[2] min-w-0 flex-row items-center justify-center gap-2 py-2.5 rounded-xl bg-ex-red disabled:opacity-40">
           {paying ? <View className="h-5 w-5 rounded-full border-2 border-white border-t-transparent" /> : (
             <><Banknote size={16} color="#fff" /><Text className="text-sm font-semibold text-white">{b2bFormatTRY(total)} Öde</Text></>
           )}

@@ -7,3 +7,4 @@ export { CriticalOrdersPanel } from './CriticalOrdersPanel';
 export { StoreActivityPanel } from './StoreActivityPanel';
 export { StorePerformanceGrid } from './StorePerformanceGrid';
 export { LoyaltySnapshot } from './LoyaltySnapshot';
+export { BenefitUsagePanel } from './BenefitUsagePanel';

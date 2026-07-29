@@ -75,8 +75,8 @@ export function ProductDetailSheet() {
   );
 
   return (
-    <Sheet open={open} onClose={closeSheet}>
-      <View className="relative -mx-5 -mt-5 h-56 overflow-hidden">
+    <Sheet open={open} onClose={closeSheet} flush>
+      <View className="relative h-56 overflow-hidden">
         <Image source={{ uri: p.image }} className="h-full w-full" resizeMode="cover" />
         <View className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent" />
         <Pressable
@@ -92,6 +92,7 @@ export function ProductDetailSheet() {
         )}
       </View>
 
+      <View className="px-6 pb-6">
       <View className="-mt-8 relative">
         <View className="flex-row items-center gap-1.5 mb-1">
           <Star size={13} color="#C8102E" fill="#C8102E" />
@@ -222,6 +223,7 @@ export function ProductDetailSheet() {
         <Button variant="gold" size="lg" full onPress={handleAdd} disabled={!canAdd}>
           Ekle · {formatPrice(unitPrice * qty)}
         </Button>
+      </View>
       </View>
     </Sheet>
   );

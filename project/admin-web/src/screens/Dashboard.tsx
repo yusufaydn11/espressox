@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth';
 import { ErrorState, PageHeader, Button, Spinner } from '../lib/ui';
 import { formatTRY, formatNum } from '../lib/utils';
 import { useEnterpriseDashboard } from '../hooks/useEnterpriseDashboard';
+import { useHqBenefitStats } from '../hooks/useHqBenefitStats';
 import {
   EnterpriseKpiCard,
   DashboardSkeleton,
@@ -16,6 +17,7 @@ import {
   StoreActivityPanel,
   StorePerformanceGrid,
   LoyaltySnapshot,
+  BenefitUsagePanel,
 } from '../components/dashboard';
 
 const HQ_DASHBOARD_ROLES = new Set(['super_admin', 'admin']);
@@ -23,6 +25,7 @@ const HQ_DASHBOARD_ROLES = new Set(['super_admin', 'admin']);
 export function Dashboard() {
   const { primaryRole, rolesLoaded, loading: authLoading } = useAuth();
   const { data, loading, error, reload } = useEnterpriseDashboard();
+  const benefitStats = useHqBenefitStats();
 
   if (authLoading || !rolesLoaded) return <Spinner label="Yetkiler doğrulanıyor…" />;
   if (!primaryRole || !HQ_DASHBOARD_ROLES.has(primaryRole)) {
@@ -42,7 +45,7 @@ export function Dashboard() {
         subtitle="Espresso X operasyon ve satış komuta merkezi"
         action={
           <Button variant="outline" size="sm" onClick={reload}>
-            <RefreshCw size={14} className="mr-1.5 inline" />
+            <RefreshCw size={14} className="inline" />
             Yenile
           </Button>
         }
@@ -83,6 +86,13 @@ export function Dashboard() {
           icon={<TrendingUp size={18} className="text-gold-700" />}
         />
       </div>
+
+      <BenefitUsagePanel
+        stats={benefitStats.stats}
+        loading={benefitStats.loading}
+        error={benefitStats.error}
+        onRetry={benefitStats.reload}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4 min-w-0">

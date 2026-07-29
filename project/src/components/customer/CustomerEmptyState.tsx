@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
 import {
   Inbox, Heart, ShoppingBag, Gift, Bell, Coffee, MapPin, type LucideIcon,
 } from 'lucide-react';
@@ -107,7 +107,7 @@ export function CustomerEmptyCard({
   onAction?: () => void;
 }) {
   return (
-    <View className="rounded-2xl border border-ink-100 bg-white shadow-card overflow-hidden">
+    <View className="rounded-2xl border border-cream-100 bg-white shadow-soft overflow-hidden">
       <CustomerEmptyState preset={preset} compact actionLabel={actionLabel} onAction={onAction} />
     </View>
   );

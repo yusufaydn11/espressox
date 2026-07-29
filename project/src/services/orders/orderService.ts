@@ -17,12 +17,22 @@ export type CreateOrderParams = {
   storeId?: string | null;
   storeName: string;
   orderType: string;
+  paymentMethod?: string;
+  couponCode?: string | null;
+  benefitType?: string | null;
+  benefitId?: string | null;
 };
 
 export type CreateOrderResult = {
   error: string | null;
   orderNumber?: string;
   pointsEarned?: number;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  billingType?: string;
+  benefitTitle?: string | null;
+  paymentStatus?: string;
 };
 
 export async function fetchOrdersByUserId(
@@ -37,6 +47,18 @@ export async function fetchOrdersByUserId(
   return { data: data as OrderWithItems[], error: null };
 }
 
+export async function fetchOrderByNumber(
+  orderNumber: string,
+): Promise<{ data: OrderWithItems | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, order_items (*)')
+    .eq('order_number', orderNumber)
+    .maybeSingle();
+  if (error) return { data: null, error: error.message };
+  return { data: data as OrderWithItems | null, error: null };
+}
+
 export async function createOrder(params: CreateOrderParams): Promise<CreateOrderResult> {
   const { data, error } = await supabase.rpc('create_order', {
     p_items: params.items.map(it => ({
@@ -49,16 +71,36 @@ export async function createOrder(params: CreateOrderParams): Promise<CreateOrde
     p_store_id: params.storeId ?? null,
     p_store_name: params.storeName,
     p_order_type: params.orderType,
+    p_payment_method: params.paymentMethod ?? 'card',
+    p_coupon_code: params.couponCode ?? null,
+    p_benefit_type: params.benefitType ?? null,
+    p_benefit_id: params.benefitId ?? null,
   });
 
   if (error) return { error: error.message };
-  const result = data as { error: string | null; order_number: string; points_earned?: number };
+  const result = data as {
+    error: string | null;
+    order_number: string;
+    points_earned?: number;
+    subtotal?: number;
+    discount?: number;
+    total?: number;
+    billing_type?: string;
+    benefit_title?: string | null;
+    payment_status?: string;
+  };
   if (result.error) return { error: result.error };
 
   return {
     error: null,
     orderNumber: result.order_number,
     pointsEarned: result.points_earned ?? 0,
+    subtotal: result.subtotal,
+    discount: result.discount,
+    total: result.total,
+    billingType: result.billing_type,
+    benefitTitle: result.benefit_title,
+    paymentStatus: result.payment_status,
   };
 }
 
@@ -80,11 +122,8 @@ export async function updateOrderStatusByNumber(
   orderNumber: string,
   status: string,
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('orders')
-    .update({ status })
-    .eq('order_number', orderNumber);
-  return { error: error?.message ?? null };
+  const { advanceOrderStatus } = await import('@/services/checkout/checkoutService');
+  return advanceOrderStatus(orderNumber, status);
 }
 
 export async function fetchRecentOrdersForAdmin(

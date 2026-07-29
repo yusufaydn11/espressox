@@ -25,8 +25,21 @@ import {
 import { TIERS, VIP_TIER_FILTER } from '@shared/constants/loyalty';
 import { customerStatusFromTier } from '@shared/utils/loyalty';
 import { useAdminToast } from '@/context/AdminToastContext';
-import type { TierInfo, Employee } from '@/types';
-import { EMPLOYEES, CHALLENGES } from '@/data';
+import type { TierInfo, Employee, Challenge } from '@/types';
+import {
+  fetchCouponsForAdmin,
+  createCouponForAdmin,
+  updateCouponForAdmin,
+  deleteCouponForAdmin,
+  fetchEmployeesForAdmin,
+  createEmployeeForAdmin,
+  updateEmployeeForAdmin,
+  deleteEmployeeForAdmin,
+  fetchChallengesForAdmin,
+  createChallengeForAdmin,
+  updateChallengeForAdmin,
+  deleteChallengeForAdmin,
+} from '@/services/admin';
 
 interface Coupon {
   id: string; code: string; title: string;
@@ -64,9 +77,9 @@ interface AdminState {
   deleteCampaign: (id: string) => Promise<void>;
 
   coupons: Coupon[];
-  addCoupon: (c: Coupon) => void;
-  updateCoupon: (id: string, patch: Partial<Coupon>) => void;
-  deleteCoupon: (id: string) => void;
+  addCoupon: (c: Coupon) => Promise<void>;
+  updateCoupon: (id: string, patch: Partial<Coupon>) => Promise<void>;
+  deleteCoupon: (id: string) => Promise<void>;
 
   customers: AdminCustomer[];
   updateCustomer: (id: string, patch: Partial<AdminCustomer>) => Promise<void>;
@@ -85,14 +98,14 @@ interface AdminState {
   deleteReward: (id: string) => Promise<void>;
 
   employees: Employee[];
-  addEmployee: (e: Employee) => void;
-  updateEmployee: (id: string, patch: Partial<Employee>) => void;
-  deleteEmployee: (id: string) => void;
+  addEmployee: (e: Employee) => Promise<void>;
+  updateEmployee: (id: string, patch: Partial<Employee>) => Promise<void>;
+  deleteEmployee: (id: string) => Promise<void>;
 
-  challenges: typeof CHALLENGES;
-  addChallenge: (c: typeof CHALLENGES[number]) => void;
-  updateChallenge: (id: string, patch: Partial<typeof CHALLENGES[number]>) => void;
-  deleteChallenge: (id: string) => void;
+  challenges: Challenge[];
+  addChallenge: (c: Challenge) => Promise<void>;
+  updateChallenge: (id: string, patch: Partial<Challenge>) => Promise<void>;
+  deleteChallenge: (id: string) => Promise<void>;
 
   qrScans: QrScanRow[];
   totalCustomers: number;
@@ -118,18 +131,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [qrScans, setQrScans] = useState<QrScanRow[]>([]);
   const [tiers, setTiers] = useState<TierInfo[]>(TIERS);
-  const [employees, setEmployees] = useState<Employee[]>(EMPLOYEES);
-  const [challenges, setChallenges] = useState(CHALLENGES);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
 
-  const [coupons, setCoupons] = useState<Coupon[]>([
-    { id: 'co1', code: 'SONBAHAR20', title: 'Sonbahar Baharat %20 İndirim', type: 'percent', value: '%20 İND', redeemed: 1840, limit: 5000, expires: '31 Eki', status: 'active' },
-    { id: 'co2', code: 'MUTLU2', title: 'Mutlu Saat 1+1', type: 'bogo', value: '1+1', redeemed: 3204, limit: 10000, expires: 'Sürekli', status: 'active' },
-    { id: 'co3', code: 'DOGUMGUNU-X', title: 'Doğum Günü Ücretsiz İçecek', type: 'gift', value: 'Ücretsiz', redeemed: 412, limit: 1820, expires: 'Aylık', status: 'active' },
-  ]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   const logAdminAction = useCallback(async (
     action: string, entityType: string, entityId: string, details: Record<string, unknown>,
@@ -145,7 +154,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
 
-    const [prodRes, storeRes, campRes, custRes, orderRes, rewRes, scanRes, statsRes] = await Promise.all([
+    const [prodRes, storeRes, campRes, custRes, orderRes, rewRes, scanRes, statsRes, couponRes, challengeRes] = await Promise.all([
       fetchAllProducts(),
       supabase.from('stores').select('*').order('name'),
       supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
@@ -154,10 +163,18 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       fetchAllRewards(),
       fetchQrScansForAdmin(20),
       fetchOrderStatsRows(),
+      fetchCouponsForAdmin(),
+      fetchChallengesForAdmin(),
     ]);
 
     if (prodRes.data) setProducts(prodRes.data);
-    if (storeRes.data) setStores(storeRes.data as Store[]);
+    const loadedStores = (storeRes.data ?? []) as Store[];
+    if (storeRes.data) setStores(loadedStores);
+
+    const empRes = await fetchEmployeesForAdmin(loadedStores);
+    if (empRes.data) setEmployees(empRes.data);
+    if (couponRes.data) setCoupons(couponRes.data);
+    if (challengeRes.data) setChallenges(challengeRes.data);
     if (campRes.data) setCampaigns(campRes.data as CampaignRow[]);
     if (rewRes.data) setRewards(rewRes.data);
     if (scanRes.data) setQrScans(scanRes.data);
@@ -350,52 +367,70 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     showToast('Ödül silindi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
-  // Coupons (local only for now)
-  const addCoupon = useCallback((c: Coupon) => {
-    setCoupons(list => [c, ...list]);
+  // Coupons
+  const addCoupon = useCallback(async (c: Coupon) => {
+    const { error } = await createCouponForAdmin(c);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Kupon eklendi');
-  }, [showToast]);
-  const updateCoupon = useCallback((id: string, patch: Partial<Coupon>) => {
-    setCoupons(list => list.map(c => c.id === id ? { ...c, ...patch } : c));
+    loadAll();
+  }, [showToast, loadAll]);
+  const updateCoupon = useCallback(async (id: string, patch: Partial<Coupon>) => {
+    const { error } = await updateCouponForAdmin(id, patch);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Kupon güncellendi');
-  }, [showToast]);
-  const deleteCoupon = useCallback((id: string) => {
-    setCoupons(list => list.filter(c => c.id !== id));
+    loadAll();
+  }, [showToast, loadAll]);
+  const deleteCoupon = useCallback(async (id: string) => {
+    const { error } = await deleteCouponForAdmin(id);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Kupon silindi');
-  }, [showToast]);
+    loadAll();
+  }, [showToast, loadAll]);
 
   const updateTier = useCallback((name: string, patch: Partial<TierInfo>) => {
     setTiers(list => list.map(t => t.name === name ? { ...t, ...patch } : t));
     showToast('Seviye güncellendi');
   }, [showToast]);
 
-  // Employees (local)
-  const addEmployee = useCallback((e: Employee) => {
-    setEmployees(list => [e, ...list]);
+  // Employees
+  const addEmployee = useCallback(async (e: Employee) => {
+    const { error } = await createEmployeeForAdmin(e, stores);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Çalışan eklendi');
-  }, [showToast]);
-  const updateEmployee = useCallback((id: string, patch: Partial<Employee>) => {
-    setEmployees(list => list.map(e => e.id === id ? { ...e, ...patch } : e));
+    loadAll();
+  }, [showToast, loadAll, stores]);
+  const updateEmployee = useCallback(async (id: string, patch: Partial<Employee>) => {
+    const { error } = await updateEmployeeForAdmin(id, patch, stores);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Çalışan güncellendi');
-  }, [showToast]);
-  const deleteEmployee = useCallback((id: string) => {
-    setEmployees(list => list.filter(e => e.id !== id));
+    loadAll();
+  }, [showToast, loadAll, stores]);
+  const deleteEmployee = useCallback(async (id: string) => {
+    const { error } = await deleteEmployeeForAdmin(id);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Çalışan silindi');
-  }, [showToast]);
+    loadAll();
+  }, [showToast, loadAll]);
 
-  // Challenges (local)
-  const addChallenge = useCallback((c: typeof CHALLENGES[number]) => {
-    setChallenges(list => [c, ...list]);
+  // Challenges
+  const addChallenge = useCallback(async (c: Challenge) => {
+    const { error } = await createChallengeForAdmin(c);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Görev eklendi');
-  }, [showToast]);
-  const updateChallenge = useCallback((id: string, patch: Partial<typeof CHALLENGES[number]>) => {
-    setChallenges(list => list.map(c => c.id === id ? { ...c, ...patch } : c));
+    loadAll();
+  }, [showToast, loadAll]);
+  const updateChallenge = useCallback(async (id: string, patch: Partial<Challenge>) => {
+    const { error } = await updateChallengeForAdmin(id, patch);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Görev güncellendi');
-  }, [showToast]);
-  const deleteChallenge = useCallback((id: string) => {
-    setChallenges(list => list.filter(c => c.id !== id));
+    loadAll();
+  }, [showToast, loadAll]);
+  const deleteChallenge = useCallback(async (id: string) => {
+    const { error } = await deleteChallengeForAdmin(id);
+    if (error) { showToast('Hata: ' + error); return; }
     showToast('Görev silindi');
-  }, [showToast]);
+    loadAll();
+  }, [showToast, loadAll]);
 
   const deleteOrder = useCallback(async (orderNumber: string) => {
     const { error } = await deleteOrderByNumber(orderNumber);
