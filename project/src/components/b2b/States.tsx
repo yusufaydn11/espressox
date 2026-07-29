@@ -27,16 +27,29 @@ export function B2BErrorState({ message, onRetry }: { message: string; onRetry?:
   );
 }
 
-export function B2BEmptyState({ title, subtitle, icon, action }: {
-  title: string; subtitle?: string; icon?: ReactNode; action?: ReactNode;
+export function B2BEmptyState({ title, subtitle, icon, action, preset }: {
+  title?: string; subtitle?: string; icon?: ReactNode; action?: ReactNode;
+  preset?: 'orders' | 'products' | 'cart' | 'invoices' | 'payments' | 'notifications' | 'templates';
 }) {
+  const presets: Record<string, { title: string; subtitle?: string }> = {
+    orders: { title: 'Henüz sipariş yok', subtitle: 'Tedarik ürünlerinden sipariş oluşturun' },
+    products: { title: 'Ürün bulunamadı', subtitle: 'Bu kriterlere uygun ürün yok' },
+    cart: { title: 'Sepetiniz boş', subtitle: 'Tedarik ürünlerinden sepete ekleyin' },
+    invoices: { title: 'Fatura bulunamadı', subtitle: 'Ödeme sonrası faturalar burada görünür' },
+    payments: { title: 'Ödeme bulunamadı', subtitle: 'Henüz kayıtlı ödeme yok' },
+    notifications: { title: 'Bildirim yok', subtitle: 'Sipariş ve ödeme güncellemeleri burada görünür' },
+    templates: { title: 'Favori sipariş yok', subtitle: 'Siparişlerden tekrarla diyerek oluşturun' },
+  };
+  const p = preset ? presets[preset] : null;
+  const displayTitle = title ?? p?.title ?? 'Veri bulunamadı';
+  const displaySubtitle = subtitle ?? p?.subtitle;
   return (
     <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-10 items-center">
       <View className="h-14 w-14 rounded-2xl bg-cream-100 items-center justify-center mb-3">
         {icon ?? <Inbox size={28} color="#C8C4CC" />}
       </View>
-      <Text className="text-sm font-medium text-ink-600">{title}</Text>
-      {subtitle && <Text className="text-xs text-ink-400 mt-1.5 text-center leading-relaxed max-w-[240px]">{subtitle}</Text>}
+      <Text className="text-sm font-medium text-ink-600 text-center">{displayTitle}</Text>
+      {displaySubtitle && <Text className="text-xs text-ink-400 mt-1.5 text-center leading-relaxed max-w-[260px]">{displaySubtitle}</Text>}
       {action && <View className="mt-4">{action}</View>}
     </View>
   );

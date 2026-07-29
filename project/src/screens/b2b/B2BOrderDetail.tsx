@@ -15,7 +15,7 @@ import { B2B_PAYMENT_METHODS } from '@shared/constants/payments';
 import { getInvoiceStatusUiLabel } from '@shared/utils/payments';
 import { B2B_INVOICE_STATUS_UI_TONES } from '@shared/constants/payments';
 import {
-  B2BScreenWrapper, B2BStatusBadge,
+  B2BScreenWrapper, B2BStatusBadge, B2BOrderTimeline,
   B2BLoadingSpinner, B2BErrorState, B2BConfirmDialog,
 } from '@/components/b2b';
 
@@ -77,7 +77,11 @@ export function B2BOrderDetail({ orderId, onBack, showToast }: { orderId: string
         showToast(result.error ?? 'Ödeme başarısız');
         return;
       }
-      showToast('Ödeme alındı, merkez onayı bekleniyor');
+      if (result.pending) {
+        showToast('Ödeme altyapısı hazırlanıyor');
+      } else {
+        showToast('Ödeme işlendi');
+      }
       setShowPaymentSheet(false);
       load();
     } catch (e) {
@@ -145,6 +149,10 @@ export function B2BOrderDetail({ orderId, onBack, showToast }: { orderId: string
           <Text className="text-xs text-ink-400 mt-1">{b2bFormatDateTime(order.created_at)}</Text>
         </View>
         <B2BStatusBadge label={B2B_ORDER_STATUS_LABELS[order.status]} tone={B2B_ORDER_STATUS_TONES[order.status]} />
+      </View>
+
+      <View className="mb-4">
+        <B2BOrderTimeline status={order.status} />
       </View>
 
       <Pressable
@@ -284,7 +292,10 @@ export function B2BOrderDetail({ orderId, onBack, showToast }: { orderId: string
           </>
         )}
         {order.status === 'paid' && (
-          <View className="flex-row items-center gap-2"><CheckCircle2 size={18} color="#2563eb" /><Text className="text-sm text-blue-600">Ödeme alındı — merkez onayı bekleniyor</Text></View>
+          <View className="flex-row items-center gap-2">
+            <CheckCircle2 size={18} color="#16a34a" />
+            <Text className="text-sm text-green-700">Ödeme işlendi — merkez sipariş onayını bekliyor</Text>
+          </View>
         )}
         {order.status === 'confirmed' && (
           <View className="flex-row items-center gap-2"><CheckCircle2 size={18} color="#2563eb" /><Text className="text-sm text-blue-600">Sipariş onaylandı, hazırlanıyor</Text></View>
@@ -324,7 +335,7 @@ function PaymentSheet({ selectedMethod, onSelectMethod, onCancel, onPay, paying,
               <Icon size={18} color={selected ? '#C8102E' : '#6E6E78'} />
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-ink-900">{m.label}</Text>
-                <Text className="text-[11px] text-ink-400">{isCard ? 'Yakında' : m.desc}</Text>
+                <Text className="text-[11px] text-ink-400">{isCard ? 'Ödeme altyapısı hazırlanıyor' : m.desc}</Text>
               </View>
               {selected && <CheckCircle2 size={18} color="#C8102E" />}
             </Pressable>

@@ -41,6 +41,7 @@ import { B2BOrders } from '@/screens/b2b/B2BOrders';
 import { B2BOrderDetail } from '@/screens/b2b/B2BOrderDetail';
 import { B2BAccount, B2BInvoices } from '@/screens/b2b/B2BAccount';
 import { B2BPayments, B2BTemplates, B2BNotifications } from '@/screens/b2b/B2BMore';
+import { cartService } from '@/services/b2b';
 
 const statusLabel = (s: string) => ORDER_STATUS_LABELS_FRANCHISE[s] ?? s;
 const statusBadge = (s: string) => ORDER_STATUS_BADGE_BG[s] ?? 'bg-ink-100';
@@ -51,32 +52,29 @@ type FranchisePage = string;
 
 // Unified navigation — store ops + B2B supply + B2B finance, all in one array.
 // B2B items are hardcoded here (not via registry) to guarantee they render.
-const navItems: Array<{ id: string; label: string; icon: LucideIcon; group: string; roles: string[] }> = [
-  // ── Mağaza Operasyon ──
-  { id: 'dashboard', label: 'Şube Paneli', icon: LayoutDashboard, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
-  { id: 'orders', label: 'Müşteri Siparişleri', icon: ShoppingBag, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
-  { id: 'scanner', label: 'QR Tara', icon: ScanLine, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+const navItems: Array<{ id: string; label: string; icon: LucideIcon; group: string; roles: string[]; badge?: 'cart' }> = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  { id: 'orders', label: 'Siparişler', icon: ShoppingBag, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  { id: 'scanner', label: 'QR Scanner', icon: ScanLine, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
   { id: 'reports', label: 'Raporlar', icon: BarChart3, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager'] },
-  { id: 'notifications', label: 'Şube Bildirimleri', icon: Bell, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
-  // ── B2B Tedarik ──
+  { id: 'notifications', label: 'Bildirimler', icon: Bell, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
   { id: 'b2b_dashboard', label: 'Tedarik Dashboard', icon: LayoutDashboard, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   { id: 'b2b_products', label: 'Ürünler', icon: Package, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
-  { id: 'b2b_cart', label: 'Sepet', icon: ShoppingCart, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
-  { id: 'b2b_orders', label: 'Siparişlerim', icon: PackageCheck, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_cart', label: 'Sepet', icon: ShoppingCart, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'], badge: 'cart' },
+  { id: 'b2b_orders', label: 'Siparişler', icon: PackageCheck, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   { id: 'b2b_templates', label: 'Favori Siparişler', icon: Boxes, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   { id: 'b2b_notifications', label: 'B2B Bildirimleri', icon: Bell, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
-  // ── B2B Finans ──
-  { id: 'b2b_account', label: 'Cari Hesap', icon: BookOpen, group: 'B2B Finans', roles: ['franchise'] },
-  { id: 'b2b_invoices', label: 'Faturalar', icon: Receipt, group: 'B2B Finans', roles: ['franchise'] },
-  { id: 'b2b_payments', label: 'Ödemeler', icon: Wallet, group: 'B2B Finans', roles: ['franchise'] },
+  { id: 'b2b_account', label: 'Cari Hesap', icon: BookOpen, group: 'Finans', roles: ['franchise'] },
+  { id: 'b2b_invoices', label: 'Faturalar', icon: Receipt, group: 'Finans', roles: ['franchise'] },
+  { id: 'b2b_payments', label: 'Ödemeler', icon: Wallet, group: 'Finans', roles: ['franchise'] },
 ];
 
-const GROUP_ORDER = ['Mağaza Operasyon', 'B2B Tedarik', 'B2B Finans'];
+const GROUP_ORDER = ['Mağaza Operasyon', 'B2B Tedarik', 'Finans'];
 
-function buildNav(role: string): Array<{ id: string; label: string; icon: LucideIcon; group: string }> {
+function buildNav(role: string): Array<{ id: string; label: string; icon: LucideIcon; group: string; badge?: 'cart' }> {
   return navItems
     .filter(n => n.roles.includes(role))
-    .map(n => ({ id: n.id, label: n.label, icon: n.icon, group: n.group }));
+    .map(n => ({ id: n.id, label: n.label, icon: n.icon, group: n.group, badge: n.badge }));
 }
 
 function buildGroups(role: string): string[] {
@@ -112,6 +110,8 @@ export function FranchiseApp() {
   const [storeName, setStoreName] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [cartCount, setCartCount] = useState(0);
+  const [roleLandingDone, setRoleLandingDone] = useState(false);
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -143,6 +143,19 @@ export function FranchiseApp() {
   }, [handleSelectOrder]);
 
   useEffect(() => {
+    if (roleLandingDone || !role) return;
+    if (role === 'franchise' || role === 'store_manager') {
+      setPage('b2b_dashboard');
+    }
+    setRoleLandingDone(true);
+  }, [role, roleLandingDone]);
+
+  useEffect(() => {
+    if (role !== 'franchise' && role !== 'store_manager') return;
+    void cartService.get().then(items => setCartCount(items.length));
+  }, [page, role]);
+
+  useEffect(() => {
     if (!storeId) { setStoreName(''); return; }
     let cancelled = false;
     const s = stores.find(st => st.id === storeId);
@@ -163,8 +176,12 @@ export function FranchiseApp() {
 
   const current = visibleNav.find(n => n.id === page);
 
-  const NavButton = ({ item }: { item: { id: string; label: string; icon: LucideIcon } }) => {
+  const roleLabel = role === 'franchise' ? 'Franchise Yetkilisi' : role === 'store_manager' ? 'Mağaza Müdürü' : 'Personel';
+  const roleAccent = role === 'franchise' ? 'bg-ex-red' : role === 'store_manager' ? 'bg-gold-500' : 'bg-ink-700';
+
+  const NavButton = ({ item }: { item: { id: string; label: string; icon: LucideIcon; badge?: 'cart' } }) => {
     const active = page === item.id;
+    const showCartBadge = item.badge === 'cart' && cartCount > 0;
     return (
       <Pressable
         onPress={() => {
@@ -174,16 +191,19 @@ export function FranchiseApp() {
         }}
         className={cn(
           'w-full flex-row items-center gap-3 px-3.5 py-2.5 rounded-xl',
-          active ? 'bg-ex-red' : 'bg-transparent',
+          active ? 'bg-ex-red shadow-red' : 'bg-transparent active:bg-cream-100',
         )}
       >
         <item.icon size={18} color={active ? '#fff' : '#6E6E78'} />
-        <Text className={cn('text-sm font-medium', active ? 'text-white' : 'text-ink-500')}>{item.label}</Text>
+        <Text className={cn('text-sm font-medium flex-1', active ? 'text-white' : 'text-ink-600')}>{item.label}</Text>
+        {showCartBadge && (
+          <View className={cn('min-w-[20px] h-5 px-1.5 rounded-full items-center justify-center', active ? 'bg-white' : 'bg-ex-red')}>
+            <Text className={cn('text-[10px] font-bold', active ? 'text-ex-red' : 'text-white')}>{cartCount}</Text>
+          </View>
+        )}
       </Pressable>
     );
   };
-
-  const roleLabel = role === 'franchise' ? 'Franchise Yetkilisi' : role === 'store_manager' ? 'Mağaza Müdürü' : 'Personel';
 
   return (
     <View className="flex-1 bg-cream-50 flex-row">
@@ -195,13 +215,16 @@ export function FranchiseApp() {
         'absolute top-0 left-0 z-50 h-full w-64 bg-white border-r border-ink-100',
         sidebarOpen ? 'flex' : 'hidden',
       )}>
-        <View className="p-5 flex-row items-center gap-2.5 border-b border-ink-100">
-          <View className="h-10 w-10 rounded-xl bg-ex-red items-center justify-center shadow-red">
+        <View className="p-5 flex-row items-center gap-2.5 border-b border-ink-100 bg-cream-50">
+          <View className={cn('h-10 w-10 rounded-xl items-center justify-center shadow-soft', roleAccent)}>
             <Store size={18} color="#fff" />
           </View>
           <View className="flex-1 min-w-0">
             <Text className="text-sm font-bold text-ink-900 leading-tight" numberOfLines={1}>{storeName || 'Şube Paneli'}</Text>
-            <Text className="text-[10px] text-ex-red mt-0.5 font-medium tracking-wide">{roleLabel}</Text>
+            <View className="flex-row items-center gap-1.5 mt-0.5">
+              <View className={cn('h-1.5 w-1.5 rounded-full', roleAccent)} />
+              <Text className="text-[10px] text-ink-500 font-medium">{roleLabel}</Text>
+            </View>
           </View>
           <Pressable onPress={() => setSidebarOpen(false)} className="ml-auto"><X size={20} color="#9494A0" /></Pressable>
         </View>
@@ -241,25 +264,35 @@ export function FranchiseApp() {
       </View>
 
       <View className="flex-1 min-w-0 flex-col">
-        <View className="pt-12 pb-3 px-5 border-b border-ink-100 bg-white/90 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
+        <View className="pt-12 pb-3 px-5 border-b border-ink-100 bg-white flex-row items-center justify-between">
+          <View className="flex-row items-center gap-3 flex-1 min-w-0">
             {page !== 'dashboard' && page !== 'b2b_dashboard' && (
               <Pressable
                 onPress={() => { setSelectedOrderId(null); setPage(role === 'franchise' || role === 'store_manager' ? 'b2b_dashboard' : 'dashboard'); }}
-                className="h-9 w-9 rounded-xl bg-ink-50 items-center justify-center active:bg-ink-100"
+                className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center active:bg-cream-200"
               >
                 <ArrowLeft size={18} color="#3D3D42" />
               </Pressable>
             )}
-            <Pressable onPress={() => setSidebarOpen(true)}><MenuIcon size={22} color="#3D3D42" /></Pressable>
-            <View>
-              <Text className="text-xl font-bold text-ink-900 leading-none">{current?.label ?? 'Panel'}</Text>
-              <Text className="text-[11px] text-ink-400 mt-1" numberOfLines={1}>{storeName}</Text>
+            <Pressable onPress={() => setSidebarOpen(true)} className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center">
+              <MenuIcon size={20} color="#3D3D42" />
+            </Pressable>
+            <View className="flex-1 min-w-0">
+              <Text className="text-lg font-bold text-ink-900 leading-none font-display" numberOfLines={1}>{current?.label ?? 'Panel'}</Text>
+              <Text className="text-[11px] text-ink-400 mt-1" numberOfLines={1}>{storeName} · {roleLabel}</Text>
             </View>
           </View>
-          <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50">
-            <View className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            <Text className="text-xs font-medium text-green-700">Şube aktif</Text>
+          <View className="flex-row items-center gap-2">
+            {(role === 'franchise' || role === 'store_manager') && cartCount > 0 && (
+              <Pressable onPress={() => setPage('b2b_cart')} className="h-9 px-3 rounded-xl bg-ex-red/10 flex-row items-center gap-1.5">
+                <ShoppingCart size={14} color="#C8102E" />
+                <Text className="text-xs font-bold text-ex-red">{cartCount}</Text>
+              </Pressable>
+            )}
+            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 border border-green-100">
+              <View className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <Text className="text-[10px] font-semibold text-green-700">Aktif</Text>
+            </View>
           </View>
         </View>
 
@@ -278,7 +311,7 @@ export function FranchiseApp() {
           {page === 'b2b_orders' && <B2BOrders showToast={showToast} onSelectOrder={handleSelectOrder} />}
           {page === 'b2b_order_detail' && selectedOrderId && <B2BOrderDetail orderId={selectedOrderId} onBack={() => { setSelectedOrderId(null); setPage('b2b_orders'); }} showToast={showToast} />}
           {page === 'b2b_account' && franchiseId && <B2BAccount franchiseId={franchiseId} />}
-          {page === 'b2b_invoices' && franchiseId && <B2BInvoices franchiseId={franchiseId} />}
+          {page === 'b2b_invoices' && franchiseId && <B2BInvoices franchiseId={franchiseId} showToast={showToast} />}
           {page === 'b2b_payments' && franchiseId && <B2BPayments franchiseId={franchiseId} />}
           {page === 'b2b_templates' && <B2BTemplates showToast={showToast} />}
           {page === 'b2b_notifications' && storeId && <B2BNotifications storeId={storeId} onOpenOrder={handleSelectOrder} />}

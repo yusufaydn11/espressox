@@ -1,20 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, TextInput } from 'react-native';
-import { Trash2, Plus, Minus, CheckCircle2, ShoppingCart } from 'lucide-react';
+import { View, Text, Pressable, TextInput, ScrollView } from 'react-native';
+import {
+  Trash2, Plus, Minus, CheckCircle2, ShoppingCart, Truck, Building2,
+  ChevronRight, ArrowLeft, ClipboardList,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   cartService, orderService,
   b2bFormatTRY,
 } from '@/services/b2b';
-import { B2BScreenWrapper, B2BSectionTitle, B2BLoadingSpinner, B2BEmptyState } from '@/components/b2b';
+import {
+  B2BScreenWrapper, B2BSectionTitle, B2BLoadingSpinner, B2BEmptyState,
+} from '@/components/b2b';
 import type { B2BCartItem } from '@/services/b2b';
 
 type ToastFn = (msg: string) => void;
+type CheckoutStep = 'cart' | 'review' | 'confirm';
 
 export function B2BCart({ showToast, onOrderCreated }: { showToast: ToastFn; onOrderCreated: () => void }) {
   const [cart, setCart] = useState<B2BCartItem[]>([]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState<CheckoutStep>('cart');
+  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const items = await cartService.get();
@@ -51,8 +60,9 @@ export function B2BCart({ showToast, onOrderCreated }: { showToast: ToastFn; onO
       }
       await cartService.clear();
       setCart([]);
+      setCreatedOrderNumber(result.order_number ?? null);
+      setStep('confirm');
       showToast(`Sipariş oluşturuldu: ${result.order_number}`);
-      onOrderCreated();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Sipariş oluşturulamadı');
     } finally {
@@ -60,93 +70,210 @@ export function B2BCart({ showToast, onOrderCreated }: { showToast: ToastFn; onO
     }
   };
 
+  const handleConfirmDone = () => {
+    setStep('cart');
+    setCreatedOrderNumber(null);
+    setNotes('');
+    onOrderCreated();
+  };
+
   if (loading) return <B2BScreenWrapper><B2BLoadingSpinner /></B2BScreenWrapper>;
 
-  if (cart.length === 0) {
+  if (cart.length === 0 && step !== 'confirm') {
     return (
       <B2BScreenWrapper>
         <B2BSectionTitle title="Sepet" subtitle="Tedarik sepetiniz" />
-        <B2BEmptyState title="Sepetiniz boş" subtitle="Tedarik ürünlerinden sepete ekleyin" icon={<ShoppingCart size={32} color="#C8C4CC" />} />
+        <B2BEmptyState preset="cart" icon={<ShoppingCart size={32} color="#C8C4CC" />} />
+      </B2BScreenWrapper>
+    );
+  }
+
+  if (step === 'confirm') {
+    return (
+      <B2BScreenWrapper>
+        <View className="items-center py-12 px-4">
+          <View className="h-20 w-20 rounded-full bg-green-50 items-center justify-center mb-5">
+            <CheckCircle2 size={40} color="#16a34a" />
+          </View>
+          <Text className="text-2xl font-bold text-ink-900 text-center">Sipariş Onaylandı</Text>
+          {createdOrderNumber && (
+            <Text className="text-sm text-ink-500 mt-2 text-center">
+              Sipariş numaranız: <Text className="font-bold text-ink-900">{createdOrderNumber}</Text>
+            </Text>
+          )}
+          <Text className="text-sm text-ink-400 mt-3 text-center leading-relaxed max-w-[300px]">
+            Siparişiniz merkeze iletildi. Ödeme adımından sonra hazırlık süreci başlayacaktır.
+          </Text>
+          <Pressable
+            onPress={handleConfirmDone}
+            className="mt-8 px-8 py-3.5 rounded-2xl bg-ex-red shadow-red active:scale-[0.98]"
+          >
+            <Text className="text-sm font-semibold text-white">Siparişlerime Git</Text>
+          </Pressable>
+        </View>
       </B2BScreenWrapper>
     );
   }
 
   return (
     <B2BScreenWrapper>
-      <B2BSectionTitle title="Sepet" subtitle={`${cart.length} kalem ürün`} />
-
-      <View className="gap-3 mb-5">
-        {cart.map(item => (
-          <View key={item.product_id} className="rounded-2xl bg-white border border-ink-100 shadow-card p-4 flex-row items-center gap-3">
-            <View className="flex-1 min-w-0">
-              <Text className="text-[11px] text-ink-400 font-mono">{item.sku}</Text>
-              <Text className="text-sm font-bold text-ink-900" numberOfLines={2}>{item.name}</Text>
-              <Text className="text-[11px] text-ink-400 mt-0.5">{b2bFormatTRY(item.price)} / {item.unit}</Text>
-            </View>
-
-            <View className="flex-row items-center gap-2 shrink-0">
-              <Pressable onPress={() => updateQty(item.product_id, -1)} className="h-8 w-8 rounded-lg bg-ink-100 items-center justify-center">
-                <Minus size={14} color="#3D3D42" />
-              </Pressable>
-              <Text className="w-10 text-center text-sm font-bold text-ink-900">{item.quantity}</Text>
-              <Pressable onPress={() => updateQty(item.product_id, 1)} className="h-8 w-8 rounded-lg bg-ink-100 items-center justify-center">
-                <Plus size={14} color="#3D3D42" />
-              </Pressable>
-            </View>
-
-            <Text className="text-sm font-bold text-ink-900 shrink-0 w-20 text-right">{b2bFormatTRY(item.price * item.quantity)}</Text>
-
-            <Pressable onPress={() => removeItem(item.product_id)} className="h-8 w-8 rounded-lg items-center justify-center">
-              <Trash2 size={16} color="#9494A0" />
-            </Pressable>
-          </View>
-        ))}
-      </View>
-
-      <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-5">
-        <Text className="text-sm font-bold text-ink-900 mb-4">Sipariş Özeti</Text>
-        <View className="gap-2 mb-4">
-          <View className="flex-row justify-between">
-            <Text className="text-sm text-ink-400">Ara Toplam</Text>
-            <Text className="text-sm font-medium text-ink-900">{b2bFormatTRY(subtotal)}</Text>
-          </View>
-          <View className="flex-row justify-between">
-            <Text className="text-sm text-ink-400">KDV</Text>
-            <Text className="text-sm font-medium text-ink-900">{b2bFormatTRY(vatTotal)}</Text>
-          </View>
-          <View className="border-t border-ink-100 pt-2 flex-row justify-between">
-            <Text className="text-sm font-bold text-ink-900">Genel Toplam</Text>
-            <Text className="text-lg font-bold text-ex-red">{b2bFormatTRY(total)}</Text>
-          </View>
-        </View>
-
-        <View className="mb-4">
-          <Text className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-1.5">Sipariş Notu</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Opsiyonel not…"
-            multiline
-            className="rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 min-h-[60px]"
-            placeholderTextColor="#9494A0"
+      <View className="flex-row items-center gap-2 mb-4">
+        {step === 'review' && (
+          <Pressable onPress={() => setStep('cart')} className="flex-row items-center gap-1.5 mr-2">
+            <ArrowLeft size={16} color="#6E6E78" />
+            <Text className="text-sm text-ink-500">Sepete Dön</Text>
+          </Pressable>
+        )}
+        <View className="flex-1">
+          <B2BSectionTitle
+            title={step === 'cart' ? 'Sepet' : 'Sipariş Özeti'}
+            subtitle={step === 'cart' ? `${cart.length} kalem ürün` : 'Bilgileri kontrol edin ve onaylayın'}
           />
         </View>
-
-        <Pressable
-          onPress={handleSubmit}
-          disabled={submitting}
-          className="flex-row items-center justify-center gap-2 py-3.5 rounded-xl bg-ex-red active:bg-ex-redDark active:scale-[0.98] disabled:opacity-40"
-        >
-          {submitting ? (
-            <View className="h-5 w-5 rounded-full border-2 border-white border-t-transparent" />
-          ) : (
-            <>
-              <CheckCircle2 size={18} color="#fff" />
-              <Text className="text-sm font-semibold text-white">Sipariş Oluştur</Text>
-            </>
-          )}
-        </Pressable>
       </View>
+
+      {/* Step indicator */}
+      <View className="flex-row items-center gap-2 mb-5">
+        <StepPill label="Sepet" active={step === 'cart'} done={step === 'review'} />
+        <View className="h-px flex-1 bg-ink-200" />
+        <StepPill label="Onay" active={step === 'review'} />
+      </View>
+
+      {step === 'cart' && (
+        <>
+          <View className="gap-3 mb-5">
+            {cart.map(item => (
+              <View key={item.product_id} className="rounded-2xl bg-white border border-ink-100 shadow-card p-4 flex-row items-center gap-3">
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[11px] text-ink-400 font-mono">{item.sku}</Text>
+                  <Text className="text-sm font-bold text-ink-900" numberOfLines={2}>{item.name}</Text>
+                  <Text className="text-[11px] text-ink-400 mt-0.5">{b2bFormatTRY(item.price)} / {item.unit}</Text>
+                </View>
+                <View className="flex-row items-center gap-2 shrink-0">
+                  <Pressable onPress={() => updateQty(item.product_id, -1)} className="h-8 w-8 rounded-lg bg-ink-100 items-center justify-center">
+                    <Minus size={14} color="#3D3D42" />
+                  </Pressable>
+                  <Text className="w-10 text-center text-sm font-bold text-ink-900">{item.quantity}</Text>
+                  <Pressable onPress={() => updateQty(item.product_id, 1)} className="h-8 w-8 rounded-lg bg-ink-100 items-center justify-center">
+                    <Plus size={14} color="#3D3D42" />
+                  </Pressable>
+                </View>
+                <Text className="text-sm font-bold text-ink-900 shrink-0 w-20 text-right">{b2bFormatTRY(item.price * item.quantity)}</Text>
+                <Pressable onPress={() => removeItem(item.product_id)} className="h-8 w-8 rounded-lg items-center justify-center">
+                  <Trash2 size={16} color="#9494A0" />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+
+          <SummaryBlock subtotal={subtotal} vatTotal={vatTotal} total={total} />
+
+          <Pressable
+            onPress={() => setStep('review')}
+            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-ex-red shadow-red active:scale-[0.98] mt-4"
+          >
+            <Text className="text-sm font-semibold text-white">Siparişe Devam Et</Text>
+            <ChevronRight size={18} color="#fff" />
+          </Pressable>
+        </>
+      )}
+
+      {step === 'review' && (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-5 mb-4">
+            <View className="flex-row items-center gap-2 mb-3">
+              <Truck size={18} color="#C8102E" />
+              <Text className="text-sm font-bold text-ink-900">Teslimat Bilgisi</Text>
+            </View>
+            <View className="rounded-xl bg-cream-50 border border-cream-200 p-4 gap-2">
+              <View className="flex-row items-center gap-2">
+                <Building2 size={14} color="#6E6E78" />
+                <Text className="text-sm text-ink-700">Merkez depo teslimatı</Text>
+              </View>
+              <Text className="text-xs text-ink-500 leading-relaxed">
+                Siparişiniz onaylandıktan sonra kayıtlı mağaza adresinize kargolanacaktır. Tahmini teslimat süresi merkez tarafından bildirilecektir.
+              </Text>
+            </View>
+          </View>
+
+          <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-5 mb-4">
+            <View className="flex-row items-center gap-2 mb-3">
+              <ClipboardList size={18} color="#C8102E" />
+              <Text className="text-sm font-bold text-ink-900">Sipariş Kalemleri</Text>
+            </View>
+            {cart.map((item, i) => (
+              <View key={item.product_id} className={cn('flex-row justify-between py-2', i > 0 && 'border-t border-ink-50')}>
+                <Text className="text-sm text-ink-700 flex-1 mr-3" numberOfLines={1}>{item.name}</Text>
+                <Text className="text-sm text-ink-500">{item.quantity} × {b2bFormatTRY(item.price)}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-5 mb-4">
+            <Text className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-2">Sipariş Notu</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Teslimat veya sipariş ile ilgili notunuz…"
+              multiline
+              className="rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 min-h-[72px]"
+              placeholderTextColor="#9494A0"
+            />
+          </View>
+
+          <SummaryBlock subtotal={subtotal} vatTotal={vatTotal} total={total} />
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={submitting}
+            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-ex-red shadow-red active:scale-[0.98] disabled:opacity-40 mt-4 mb-8"
+          >
+            {submitting ? (
+              <View className="h-5 w-5 rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <>
+                <CheckCircle2 size={18} color="#fff" />
+                <Text className="text-sm font-semibold text-white">Siparişi Onayla — {b2bFormatTRY(total)}</Text>
+              </>
+            )}
+          </Pressable>
+        </ScrollView>
+      )}
     </B2BScreenWrapper>
+  );
+}
+
+function StepPill({ label, active, done }: { label: string; active?: boolean; done?: boolean }) {
+  return (
+    <View className={cn(
+      'px-3 py-1.5 rounded-full border',
+      active ? 'bg-ex-red border-ex-red' : done ? 'bg-green-50 border-green-200' : 'bg-ink-50 border-ink-200',
+    )}>
+      <Text className={cn('text-xs font-semibold', active ? 'text-white' : done ? 'text-green-700' : 'text-ink-400')}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function SummaryBlock({ subtotal, vatTotal, total }: { subtotal: number; vatTotal: number; total: number }) {
+  return (
+    <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-5">
+      <Text className="text-sm font-bold text-ink-900 mb-4">Sipariş Özeti</Text>
+      <View className="gap-2">
+        <View className="flex-row justify-between">
+          <Text className="text-sm text-ink-400">Ara Toplam</Text>
+          <Text className="text-sm font-medium text-ink-900">{b2bFormatTRY(subtotal)}</Text>
+        </View>
+        <View className="flex-row justify-between">
+          <Text className="text-sm text-ink-400">KDV</Text>
+          <Text className="text-sm font-medium text-ink-900">{b2bFormatTRY(vatTotal)}</Text>
+        </View>
+        <View className="border-t border-ink-100 pt-2 flex-row justify-between">
+          <Text className="text-sm font-bold text-ink-900">Genel Toplam</Text>
+          <Text className="text-lg font-bold text-ex-red">{b2bFormatTRY(total)}</Text>
+        </View>
+      </View>
+    </View>
   );
 }

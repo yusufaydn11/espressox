@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, Pressable, Image, ScrollView } from 'react-native';
-import { Package, ShoppingCart, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { View, ScrollView, Pressable, Text } from 'react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cn } from '@/lib/utils';
 import { usePagination } from '@/lib/usePagination';
 import {
-  productService, cartService,
-  b2bFormatTRY, getEffectivePrice, hasActiveCampaign,
+  productService, cartService, orderService,
+  getEffectivePrice, hasActiveCampaign,
   type B2BProduct, type B2BProductStock, type B2BCartItem,
 } from '@/services/b2b';
 import {
@@ -15,7 +16,12 @@ import {
   deriveB2BCategories,
 } from '@shared/utils/b2b';
 import { B2B_PRODUCT_SEARCH_PLACEHOLDER } from '@shared/constants/b2b';
-import { B2BScreenWrapper, B2BSectionTitle, B2BSearchBar, B2BLoadingSpinner, B2BErrorState, B2BEmptyState } from '@/components/b2b';
+import {
+  B2BScreenWrapper, B2BSectionTitle, B2BSearchBar, B2BErrorState, B2BEmptyState,
+  B2BProductGridSkeleton, B2BProductCard,
+} from '@/components/b2b';
+
+const FAV_KEY = 'b2b_favorite_product_ids';
 
 type ToastFn = (msg: string) => void;
 
@@ -27,13 +33,30 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [cart, setCart] = useState<B2BCartItem[]>([]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [lastOrderProductIds, setLastOrderProductIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [p, s] = await Promise.all([productService.getActive(), productService.getStock()]);
-      setProducts(p); setStock(s);
-      setCart(await cartService.get());
+      const [p, s, c, favRaw, orders] = await Promise.all([
+        productService.getActive(),
+        productService.getStock(),
+        cartService.get(),
+        AsyncStorage.getItem(FAV_KEY),
+        orderService.listWithItems().catch(() => []),
+      ]);
+      setProducts(p); setStock(s); setCart(c);
+      if (favRaw) setFavorites(new Set(JSON.parse(favRaw) as string[]));
+      const lastOrder = orders[0];
+      if (lastOrder?.b2b_order_items?.length) {
+        setLastOrderProductIds(
+          lastOrder.b2b_order_items
+            .map(i => i.product_id)
+            .filter((id): id is string => !!id)
+            .slice(0, 6),
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ürünler yüklenemedi');
     } finally {
@@ -44,17 +67,11 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
   useEffect(() => { load(); }, [load]);
 
   const categories = useMemo(() => deriveB2BCategories(products), [products]);
-
   const filtered = useMemo(
-    () => filterB2BProductsBySearch(
-      filterB2BProductsByCategory(products, category),
-      search,
-    ),
+    () => filterB2BProductsBySearch(filterB2BProductsByCategory(products, category), search),
     [products, search, category],
   );
-
-  const { pageItems, page, setPage, totalPages, hasPrev, hasNext, total } = usePagination(filtered, 20);
-
+  const { pageItems, page, setPage, totalPages, hasPrev, hasNext, total } = usePagination(filtered, 12);
   const getStockQty = (productId: string) => findB2BStockQty(stock, productId);
 
   const addToCart = async (p: B2BProduct) => {
@@ -66,12 +83,75 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
     showToast(`${p.name} sepete eklendi`);
   };
 
-  if (loading) return <B2BScreenWrapper><B2BLoadingSpinner label="Ürünler yükleniyor…" /></B2BScreenWrapper>;
+  const toggleFavorite = async (productId: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      void AsyncStorage.setItem(FAV_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  if (loading) {
+    return (
+      <B2BScreenWrapper>
+        <B2BProductGridSkeleton />
+      </B2BScreenWrapper>
+    );
+  }
   if (error) return <B2BScreenWrapper><B2BErrorState message={error} onRetry={load} /></B2BScreenWrapper>;
+
+  const favProducts = products.filter(p => favorites.has(p.id)).slice(0, 4);
+  const suggestedProducts = products.filter(p => lastOrderProductIds.includes(p.id)).slice(0, 4);
 
   return (
     <B2BScreenWrapper>
       <B2BSectionTitle title="Tedarik Ürünleri" subtitle="Merkez depodan tedarik edilebilir ürünler" />
+
+      {suggestedProducts.length > 0 && (
+        <View className="mb-5">
+          <Text className="text-sm font-bold text-ink-900 mb-3">Son Siparişten Öneri</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3">
+            {suggestedProducts.map(p => (
+              <View key={`suggest-${p.id}`} className="w-64">
+                <B2BProductCard
+                  product={p}
+                  stockQty={getStockQty(p.id)}
+                  effectivePrice={getEffectivePrice(p)}
+                  hasCampaign={hasActiveCampaign(p)}
+                  cartQty={cart.find(i => i.product_id === p.id)?.quantity}
+                  isFavorite={favorites.has(p.id)}
+                  onAdd={() => void addToCart(p)}
+                  onToggleFavorite={() => void toggleFavorite(p.id)}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {favProducts.length > 0 && (
+        <View className="mb-5">
+          <Text className="text-sm font-bold text-ink-900 mb-3">Favori Ürünler</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3">
+            {favProducts.map(p => (
+              <View key={p.id} className="w-64">
+                <B2BProductCard
+                  product={p}
+                  stockQty={getStockQty(p.id)}
+                  effectivePrice={getEffectivePrice(p)}
+                  hasCampaign={hasActiveCampaign(p)}
+                  cartQty={cart.find(i => i.product_id === p.id)?.quantity}
+                  isFavorite
+                  onAdd={() => void addToCart(p)}
+                  onToggleFavorite={() => void toggleFavorite(p.id)}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View className="mb-3"><B2BSearchBar value={search} onChange={setSearch} placeholder={B2B_PRODUCT_SEARCH_PLACEHOLDER} /></View>
 
@@ -80,76 +160,32 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
           <Pressable
             key={c}
             onPress={() => setCategory(c)}
-            className={cn('px-3.5 py-2 rounded-lg', category === c ? 'bg-ink-900' : 'bg-white border border-ink-100')}
+            className={cn('px-3.5 py-2 rounded-full border', category === c ? 'bg-ink-900 border-ink-900' : 'bg-white border-ink-200')}
           >
-            <Text className={cn('text-xs font-medium', category === c ? 'text-white' : 'text-ink-500')}>{c === 'all' ? 'Tümü' : c}</Text>
+            <Text className={cn('text-xs font-semibold', category === c ? 'text-white' : 'text-ink-500')}>
+              {c === 'all' ? 'Tümü' : c}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
 
       {filtered.length === 0 ? (
-        <B2BEmptyState title="Ürün bulunamadı" subtitle="Bu kriterlere uygun ürün yok" icon={<Package size={32} color="#C8C4CC" />} />
+        <B2BEmptyState preset="products" />
       ) : (
-        <View className="gap-3">
-          {pageItems.map(p => {
-            const stockQty = getStockQty(p.id);
-            const inStock = stockQty > 0;
-            const effPrice = getEffectivePrice(p);
-            const campaign = hasActiveCampaign(p);
-            const inCartItem = cart.find(i => i.product_id === p.id);
-
-            return (
-              <View key={p.id} className="rounded-2xl bg-white border border-ink-100 shadow-card p-4 flex-row gap-3">
-                <View className="h-16 w-16 rounded-xl bg-cream-100 items-center justify-center shrink-0">
-                  {p.image_url ? (
-                    <Image source={{ uri: p.image_url }} className="h-16 w-16 rounded-xl" />
-                  ) : (
-                    <Package size={24} color="#C8C4CC" />
-                  )}
-                </View>
-
-                <View className="flex-1 min-w-0">
-                  <View className="flex-row items-center gap-2 flex-wrap">
-                    {campaign && (
-                      <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-ex-100">
-                        <Tag size={8} color="#C8102E" />
-                        <Text className="text-[10px] font-semibold text-ex-red">{p.campaign_label || 'Kampanya'}</Text>
-                      </View>
-                    )}
-                    {!inStock && (
-                      <View className="px-2 py-0.5 rounded-full bg-red-50">
-                        <Text className="text-[10px] font-semibold text-ex-red">Stokta Yok</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text className="text-[11px] text-ink-400 font-mono mt-1">{p.sku}</Text>
-                  <Text className="text-sm font-bold text-ink-900 mt-0.5" numberOfLines={2}>{p.name}</Text>
-                  <View className="flex-row items-center gap-2 mt-1">
-                    <Text className="text-[11px] text-ink-500">Birim: {p.unit}</Text>
-                    <Text className="text-[11px] text-ink-400">·</Text>
-                    <Text className="text-[11px] text-ink-500">KDV %{p.vat_rate}</Text>
-                    {inStock && <Text className="text-[11px] text-green-600">Stok: {stockQty}</Text>}
-                  </View>
-
-                  <View className="flex-row items-end justify-between mt-2">
-                    <View>
-                      {campaign && <Text className="text-[11px] text-ink-400 line-through">{b2bFormatTRY(p.price)}</Text>}
-                      <Text className="text-base font-bold text-ink-900">{b2bFormatTRY(effPrice)}</Text>
-                      <Text className="text-[10px] text-ink-400">Min {p.min_order_qty} {p.unit}</Text>
-                    </View>
-                    <Pressable
-                      onPress={() => addToCart(p)}
-                      disabled={!inStock}
-                      className={cn('flex-row items-center gap-1.5 px-3 py-2 rounded-xl', inStock ? (inCartItem ? 'bg-ink-900' : 'bg-ex-red') : 'bg-ink-100')}
-                    >
-                      <ShoppingCart size={14} color={inStock ? '#fff' : '#9494A0'} />
-                      <Text className="text-xs font-semibold text-white">{inCartItem ? `${inCartItem.quantity}` : 'Ekle'}</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
+        <View className="gap-4">
+          {pageItems.map(p => (
+            <B2BProductCard
+              key={p.id}
+              product={p}
+              stockQty={getStockQty(p.id)}
+              effectivePrice={getEffectivePrice(p)}
+              hasCampaign={hasActiveCampaign(p)}
+              cartQty={cart.find(i => i.product_id === p.id)?.quantity}
+              isFavorite={favorites.has(p.id)}
+              onAdd={() => void addToCart(p)}
+              onToggleFavorite={() => void toggleFavorite(p.id)}
+            />
+          ))}
         </View>
       )}
 

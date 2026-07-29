@@ -11,11 +11,19 @@ export function B2BScreenWrapper({ children, maxW = 460 }: { children: ReactNode
   );
 }
 
-export function B2BSectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+export function B2BSectionTitle({ title, subtitle, badge }: { title: string; subtitle?: string; badge?: string }) {
   return (
     <View className="mb-5">
-      <Text className="text-lg font-bold text-ink-900">{title}</Text>
-      {subtitle && <Text className="text-sm text-ink-400 mt-0.5">{subtitle}</Text>}
+      <View className="flex-row items-center gap-2">
+        <View className="h-6 w-1 rounded-full bg-ex-red" />
+        <Text className="text-xl font-bold text-ink-900 font-display flex-1">{title}</Text>
+        {badge && (
+          <View className="px-2.5 py-1 rounded-full bg-gold-100 border border-gold-200">
+            <Text className="text-[10px] font-bold text-gold-700 uppercase tracking-wide">{badge}</Text>
+          </View>
+        )}
+      </View>
+      {subtitle && <Text className="text-sm text-ink-500 mt-1.5 ml-3">{subtitle}</Text>}
     </View>
   );
 }

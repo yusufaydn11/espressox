@@ -9,7 +9,7 @@ import {
 } from '@/services/b2b';
 import {
   B2BScreenWrapper, B2BSectionTitle, B2BFilterChips, B2BStatusBadge,
-  B2BLoadingSpinner, B2BErrorState, B2BEmptyState, B2BConfirmDialog,
+  B2BErrorState, B2BEmptyState, B2BConfirmDialog, B2BListSkeleton,
 } from '@/components/b2b';
 
 type ToastFn = (msg: string) => void;
@@ -70,7 +70,9 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
     try {
       const result = await orderService.reorder(reorderTarget);
       if (result.error) { showToast(result.error); return; }
-      showToast('Sipariş sepete eklendi');
+      const num = result.new_order?.order_number;
+      showToast(num ? `Yeni sipariş oluşturuldu: ${num}` : 'Yeni sipariş oluşturuldu');
+      load();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Tekrar sipariş başarısız');
     }
@@ -79,10 +81,7 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
   if (loading) {
     return (
       <B2BScreenWrapper>
-        <View className="gap-3 mb-2">
-          {[1, 2, 3].map(i => <View key={i} className="h-16 bg-ink-100 rounded-2xl" />)}
-        </View>
-        <B2BLoadingSpinner label="Siparişler yükleniyor…" />
+        <B2BListSkeleton rows={5} />
       </B2BScreenWrapper>
     );
   }
@@ -96,8 +95,9 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
 
       {filtered.length === 0 ? (
         <B2BEmptyState
-          title={filter !== 'all' ? 'Bu filtrede sipariş yok' : 'Henüz sipariş yok'}
-          subtitle={filter !== 'all' ? 'Farklı bir filtre deneyin' : 'Tedarik ürünlerinden sipariş oluşturun'}
+          preset="orders"
+          title={filter !== 'all' ? 'Bu filtrede sipariş yok' : undefined}
+          subtitle={filter !== 'all' ? 'Farklı bir filtre deneyin' : undefined}
           icon={<PackageCheck size={28} color="#C8C4CC" />}
         />
       ) : (
@@ -106,12 +106,12 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
             <View key={o.id}>
               <Pressable
                 onPress={() => onSelectOrder(o.id)}
-                className="rounded-2xl bg-white border border-ink-100 shadow-card p-4"
+                className="rounded-3xl bg-white border border-ink-100 shadow-soft p-4 active:opacity-90"
               >
                 <View className="flex-row items-center justify-between gap-3">
                   <View className="flex-row items-center gap-3 flex-1 min-w-0">
-                    <View className="h-10 w-10 rounded-xl bg-cream-100 items-center justify-center shrink-0">
-                      <PackageCheck size={20} color="#6E6E78" />
+                    <View className="h-11 w-11 rounded-2xl bg-ex-red/10 items-center justify-center shrink-0">
+                      <PackageCheck size={20} color="#C8102E" />
                     </View>
                     <View className="flex-1 min-w-0">
                       <Text className="text-sm font-bold text-ink-900">{o.order_number}</Text>
@@ -181,8 +181,8 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
       <B2BConfirmDialog
         open={!!reorderTarget}
         title="Tekrar Sipariş Ver"
-        message="Bu siparişin ürünleri sepete eklensin mi?"
-        confirmLabel="Sepete Ekle"
+        message="Bu siparişin aynısından yeni bir sipariş oluşturulsun mu?"
+        confirmLabel="Sipariş Oluştur"
         onConfirm={handleReorder}
         onClose={() => setReorderTarget(null)}
         danger={false}
