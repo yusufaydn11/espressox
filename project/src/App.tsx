@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator, Pressable } from 'react-native';
 import * as Linking from 'expo-linking';
-import { Coffee, CheckCircle2, ArrowLeft } from 'lucide-react-native';
+import { Coffee, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { AdminProvider, useAdmin } from '@/context/AdminContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -74,14 +74,16 @@ function DeepLinkHandler() {
 
 function Shell() {
   const { role, setRole } = useApp();
-  const { user, loading, isAdmin, isFranchise } = useAuth();
+  const { user, loading, isAdmin, isFranchise, isStoreManager, isStaff, isInternal } = useAuth();
 
   usePushNotifications();
 
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthScreen />;
 
-  if (isFranchise) {
+  // Franchise, store_manager, and staff all see the FranchiseApp (store panel)
+  // Franchise users get B2B supply features; store_manager gets operational features; staff gets limited views
+  if (isFranchise || isStoreManager || isStaff) {
     return (
       <AdminProvider>
         <FranchiseApp />

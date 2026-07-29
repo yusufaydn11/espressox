@@ -1,5 +1,5 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { ShoppingBag } from 'lucide-react-native';
+import { ShoppingBag } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { formatPrice } from '@/lib/utils';
 import { CustomerHeader } from '@/components/CustomerHeader';

@@ -1,7 +1,7 @@
 import { View, Text } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { Crown } from 'lucide-react-native';
+import { Crown } from 'lucide-react';
 
 export function CustomerHeader() {
   const { points } = useApp();

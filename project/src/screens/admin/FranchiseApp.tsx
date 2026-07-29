@@ -3,7 +3,10 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
   LayoutDashboard, ShoppingBag, ScanLine, BarChart3, Bell,
   LogOut, Menu as MenuIcon, X, ArrowLeft, Coffee, Store,
-} from 'lucide-react-native';
+  Package, ShoppingCart, PackageCheck, BookOpen, Receipt,
+  Wallet, Boxes,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 import { supabase } from '@/lib/supabase';
@@ -11,15 +14,50 @@ import { cn } from '@/lib/utils';
 import { AdminScanner } from '@/screens/admin/AdminScanner';
 import { FranchiseReports } from '@/screens/admin/FranchiseReports';
 
-type FranchisePage = 'dashboard' | 'orders' | 'scanner' | 'reports' | 'notifications';
+// B2B screens
+import { B2BDashboard } from '@/screens/b2b/B2BDashboard';
+import { B2BProducts } from '@/screens/b2b/B2BProducts';
+import { B2BCart } from '@/screens/b2b/B2BCart';
+import { B2BOrders } from '@/screens/b2b/B2BOrders';
+import { B2BOrderDetail } from '@/screens/b2b/B2BOrderDetail';
+import { B2BAccount, B2BInvoices } from '@/screens/b2b/B2BAccount';
+import { B2BPayments, B2BTemplates, B2BNotifications } from '@/screens/b2b/B2BMore';
 
-const nav: { id: FranchisePage; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'Panel', icon: LayoutDashboard },
-  { id: 'orders', label: 'Siparişler', icon: ShoppingBag },
-  { id: 'scanner', label: 'QR Tara', icon: ScanLine },
-  { id: 'reports', label: 'Raporlar', icon: BarChart3 },
-  { id: 'notifications', label: 'Bildirimler', icon: Bell },
+type FranchisePage = string;
+
+// Unified navigation — store ops + B2B supply + B2B finance, all in one array.
+// B2B items are hardcoded here (not via registry) to guarantee they render.
+const navItems: Array<{ id: string; label: string; icon: LucideIcon; group: string; roles: string[] }> = [
+  // ── Mağaza Operasyon ──
+  { id: 'dashboard', label: 'Şube Paneli', icon: LayoutDashboard, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  { id: 'orders', label: 'Müşteri Siparişleri', icon: ShoppingBag, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  { id: 'scanner', label: 'QR Tara', icon: ScanLine, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  { id: 'reports', label: 'Raporlar', icon: BarChart3, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager'] },
+  { id: 'notifications', label: 'Şube Bildirimleri', icon: Bell, group: 'Mağaza Operasyon', roles: ['franchise', 'store_manager', 'staff'] },
+  // ── B2B Tedarik ──
+  { id: 'b2b_dashboard', label: 'Tedarik Dashboard', icon: LayoutDashboard, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_products', label: 'Ürünler', icon: Package, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_cart', label: 'Sepet', icon: ShoppingCart, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_orders', label: 'Siparişlerim', icon: PackageCheck, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_templates', label: 'Favori Siparişler', icon: Boxes, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  // ── B2B Finans ──
+  { id: 'b2b_account', label: 'Cari Hesap', icon: BookOpen, group: 'B2B Finans', roles: ['franchise'] },
+  { id: 'b2b_invoices', label: 'Faturalar', icon: Receipt, group: 'B2B Finans', roles: ['franchise'] },
+  { id: 'b2b_payments', label: 'Ödemeler', icon: Wallet, group: 'B2B Finans', roles: ['franchise'] },
 ];
+
+const GROUP_ORDER = ['Mağaza Operasyon', 'B2B Tedarik', 'B2B Finans'];
+
+function buildNav(role: string): Array<{ id: string; label: string; icon: LucideIcon; group: string }> {
+  return navItems
+    .filter(n => n.roles.includes(role))
+    .map(n => ({ id: n.id, label: n.label, icon: n.icon, group: n.group }));
+}
+
+function buildGroups(role: string): string[] {
+  const visible = new Set(navItems.filter(n => n.roles.includes(role)).map(n => n.group));
+  return GROUP_ORDER.filter(g => visible.has(g));
+}
 
 type StoreOrder = {
   id: string;
@@ -38,14 +76,23 @@ type StoreNotif = {
   body: string;
   created_at: string;
   is_read: boolean;
+  data: Record<string, unknown> | null;
 };
 
 export function FranchiseApp() {
-  const { user, signOut, storeId } = useAuth();
+  const { user, signOut, storeId, role, franchiseId } = useAuth();
   const { stores } = useAdmin();
   const [page, setPage] = useState<FranchisePage>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeName, setStoreName] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [pendingNotifOrderId, setPendingNotifOrderId] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  }, []);
 
   useEffect(() => {
     if (storeId) {
@@ -58,13 +105,21 @@ export function FranchiseApp() {
     }
   }, [storeId, stores]);
 
-  const current = nav.find(n => n.id === page)!;
+  // Build nav from unified nav array
+  const visibleNav = buildNav(role);
+  const visibleGroups = buildGroups(role);
 
-  const NavButton = ({ item }: { item: typeof nav[0] }) => {
+  const current = visibleNav.find(n => n.id === page);
+
+  const NavButton = ({ item }: { item: { id: string; label: string; icon: LucideIcon } }) => {
     const active = page === item.id;
     return (
       <Pressable
-        onPress={() => { setPage(item.id); setSidebarOpen(false); }}
+        onPress={() => {
+          setPage(item.id);
+          setSelectedOrderId(null);
+          setSidebarOpen(false);
+        }}
         className={cn(
           'w-full flex-row items-center gap-3 px-3.5 py-2.5 rounded-xl',
           active ? 'bg-ex-red' : 'bg-transparent',
@@ -74,6 +129,13 @@ export function FranchiseApp() {
         <Text className={cn('text-sm font-medium', active ? 'text-white' : 'text-ink-500')}>{item.label}</Text>
       </Pressable>
     );
+  };
+
+  const roleLabel = role === 'franchise' ? 'Franchise Yetkilisi' : role === 'store_manager' ? 'Mağaza Müdürü' : 'Personel';
+
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setPage('b2b_order_detail');
   };
 
   return (
@@ -92,7 +154,7 @@ export function FranchiseApp() {
           </View>
           <View className="flex-1 min-w-0">
             <Text className="text-sm font-bold text-ink-900 leading-tight" numberOfLines={1}>{storeName || 'Şube Paneli'}</Text>
-            <Text className="text-[10px] text-ex-red mt-0.5 font-medium tracking-wide">Franchise Yetkilisi</Text>
+            <Text className="text-[10px] text-ex-red mt-0.5 font-medium tracking-wide">{roleLabel}</Text>
           </View>
           <Pressable onPress={() => setSidebarOpen(false)} className="ml-auto"><X size={20} color="#9494A0" /></Pressable>
         </View>
@@ -104,13 +166,20 @@ export function FranchiseApp() {
             </View>
             <View className="flex-1 min-w-0">
               <Text className="text-xs font-medium text-ink-900" numberOfLines={1}>{user?.email}</Text>
-              <Text className="text-[10px] text-ink-400">Şube Yetkilisi</Text>
+              <Text className="text-[10px] text-ink-400">{roleLabel}</Text>
             </View>
           </View>
         </View>
 
         <ScrollView className="flex-1 p-3" showsVerticalScrollIndicator={false} contentContainerClassName="gap-1">
-          {nav.map(item => <NavButton key={item.id} item={item} />)}
+          {visibleGroups.map(group => (
+            <View key={group} className="mb-3">
+              <Text className="text-[10px] font-semibold text-ink-300 uppercase tracking-wider px-3.5 mb-1.5">{group}</Text>
+              <View className="gap-1">
+                {visibleNav.filter(n => n.group === group).map(item => <NavButton key={item.id} item={item} />)}
+              </View>
+            </View>
+          ))}
         </ScrollView>
 
         <View className="p-3 border-t border-ink-100">
@@ -127,9 +196,9 @@ export function FranchiseApp() {
       <View className="flex-1 min-w-0 flex-col">
         <View className="pt-12 pb-3 px-5 border-b border-ink-100 bg-white/90 flex-row items-center justify-between">
           <View className="flex-row items-center gap-3">
-            {page !== 'dashboard' && (
+            {page !== 'dashboard' && page !== 'b2b_dashboard' && (
               <Pressable
-                onPress={() => setPage('dashboard')}
+                onPress={() => { setSelectedOrderId(null); setPage(role === 'franchise' || role === 'store_manager' ? 'b2b_dashboard' : 'dashboard'); }}
                 className="h-9 w-9 rounded-xl bg-ink-50 items-center justify-center active:bg-ink-100"
               >
                 <ArrowLeft size={18} color="#3D3D42" />
@@ -137,7 +206,7 @@ export function FranchiseApp() {
             )}
             <Pressable onPress={() => setSidebarOpen(true)}><MenuIcon size={22} color="#3D3D42" /></Pressable>
             <View>
-              <Text className="text-xl font-bold text-ink-900 leading-none">{current.label}</Text>
+              <Text className="text-xl font-bold text-ink-900 leading-none">{current?.label ?? 'Panel'}</Text>
               <Text className="text-[11px] text-ink-400 mt-1" numberOfLines={1}>{storeName}</Text>
             </View>
           </View>
@@ -148,13 +217,34 @@ export function FranchiseApp() {
         </View>
 
         <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
+          {/* Store Operations */}
           {page === 'dashboard' && <FranchiseDashboard storeId={storeId} storeName={storeName} onGoOrders={() => setPage('orders')} />}
           {page === 'orders' && <FranchiseOrders storeId={storeId} />}
           {page === 'scanner' && <AdminScanner />}
           {page === 'reports' && <FranchiseReports storeId={storeId} storeName={storeName} />}
-          {page === 'notifications' && <FranchiseNotifications storeId={storeId} />}
+          {page === 'notifications' && <FranchiseNotifications storeId={storeId} onOpenOrder={handleSelectOrder} />}
+
+          {/* B2B */}
+          {page === 'b2b_dashboard' && storeId && <B2BDashboard storeId={storeId} storeName={storeName} />}
+          {page === 'b2b_products' && <B2BProducts showToast={showToast} />}
+          {page === 'b2b_cart' && <B2BCart showToast={showToast} onOrderCreated={() => setPage('b2b_orders')} />}
+          {page === 'b2b_orders' && <B2BOrders showToast={showToast} onSelectOrder={handleSelectOrder} />}
+          {page === 'b2b_order_detail' && selectedOrderId && <B2BOrderDetail orderId={selectedOrderId} onBack={() => { setSelectedOrderId(null); setPage('b2b_orders'); }} showToast={showToast} />}
+          {page === 'b2b_account' && franchiseId && <B2BAccount franchiseId={franchiseId} />}
+          {page === 'b2b_invoices' && franchiseId && <B2BInvoices franchiseId={franchiseId} />}
+          {page === 'b2b_payments' && franchiseId && <B2BPayments franchiseId={franchiseId} />}
+          {page === 'b2b_templates' && <B2BTemplates showToast={showToast} />}
+          {page === 'b2b_notifications' && storeId && <B2BNotifications storeId={storeId} onOpenOrder={handleSelectOrder} />}
         </ScrollView>
       </View>
+
+      {toast && (
+        <View className="absolute bottom-8 inset-x-5 z-50">
+          <View className="bg-ink-900 rounded-xl px-4 py-3 shadow-premium">
+            <Text className="text-sm font-medium text-white text-center">{toast}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -350,7 +440,7 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
 
       {visible.length === 0 ? (
         <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-10 items-center">
-          <ShoppingBag size={32} color="#C8C8D0" />
+          <ShoppingBag size={32} color="#C8C4CC" />
           <Text className="text-sm text-ink-400 mt-3">{filter === 'active' ? 'Aktif sipariş yok' : 'Sipariş bulunamadı'}</Text>
         </View>
       ) : (
@@ -402,27 +492,36 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
   );
 }
 
-function FranchiseNotifications({ storeId }: { storeId: string | null }) {
-  const [notifs, setNotifs] = useState<StoreNotif[]>([]);
+function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | null; onOpenOrder: (orderId: string) => void }) {
+  const [notifs, setNotifs] = useState<(StoreNotif & { data: Record<string, unknown> | null })[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!storeId) { setLoading(false); return; }
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('id, title, body, created_at, is_read, data')
-        .or(`data->>store_id.eq.${storeId}`)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (error) { setLoading(false); return; }
-      const filtered = ((data ?? []) as (StoreNotif & { data: Record<string, unknown> })[])
-        .filter(n => (n.data as Record<string, unknown>)?.store_id === storeId);
-      setNotifs(filtered.map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, is_read: n.is_read })));
-      setLoading(false);
-    })();
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id, title, body, created_at, is_read, data')
+      .or(`data->>store_id.eq.${storeId}`)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) { setLoading(false); return; }
+    const filtered = ((data ?? []) as (StoreNotif & { data: Record<string, unknown> })[])
+      .filter(n => (n.data as Record<string, unknown>)?.store_id === storeId);
+    setNotifs(filtered.map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, is_read: n.is_read, data: n.data })));
+    setLoading(false);
   }, [storeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handlePress = async (n: StoreNotif & { data: Record<string, unknown> | null }) => {
+    if (!n.is_read) {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
+      setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
+    }
+    const orderId = n.data?.order_id as string | undefined;
+    if (orderId) onOpenOrder(orderId);
+  };
 
   if (loading) return <View className="items-center justify-center py-20"><View className="h-8 w-8 rounded-full border-2 border-ex-red border-t-transparent" /></View>;
 
@@ -431,24 +530,36 @@ function FranchiseNotifications({ storeId }: { storeId: string | null }) {
       <Text className="text-lg font-bold text-ink-900">Şube bildirimleri</Text>
       {notifs.length === 0 ? (
         <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-10 items-center">
-          <Bell size={32} color="#C8C8D0" />
+          <Bell size={32} color="#C8C4CC" />
           <Text className="text-sm text-ink-400 mt-3">Bu şubeye ait bildirim yok</Text>
         </View>
       ) : (
-        notifs.map(n => (
-          <View key={n.id} className={cn('rounded-2xl border shadow-card p-4', n.is_read ? 'bg-white border-ink-100' : 'bg-white border-ex-red/20')}>
-            <View className="flex-row items-start gap-3">
-              <View className={cn('h-9 w-9 rounded-xl items-center justify-center shrink-0', n.is_read ? 'bg-ink-50' : 'bg-ex-red/10')}>
-                <Bell size={16} color={n.is_read ? '#9494A0' : '#C8102E'} />
+        notifs.map(n => {
+          const orderId = n.data?.order_id as string | undefined;
+          const isB2B = (n.data?.source as string | undefined)?.startsWith('b2b');
+          return (
+            <Pressable key={n.id} onPress={() => handlePress(n)} disabled={!orderId}>
+              <View className={cn('rounded-2xl border shadow-card p-4', n.is_read ? 'bg-white border-ink-100' : 'bg-white border-ex-red/20', orderId && 'active:opacity-70')}>
+                <View className="flex-row items-start gap-3">
+                  <View className={cn('h-9 w-9 rounded-xl items-center justify-center shrink-0', n.is_read ? 'bg-ink-50' : 'bg-ex-red/10')}>
+                    <Bell size={16} color={n.is_read ? '#9494A0' : '#C8102E'} />
+                  </View>
+                  <View className="flex-1 min-w-0">
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-sm font-semibold text-ink-900">{n.title}</Text>
+                      {isB2B && <View className="px-1.5 py-0.5 rounded bg-ex-red/10"><Text className="text-[10px] font-bold text-ex-red">B2B</Text></View>}
+                    </View>
+                    <Text className="text-sm text-ink-500 mt-0.5">{n.body}</Text>
+                    <View className="flex-row items-center gap-2 mt-1.5">
+                      <Text className="text-[11px] text-ink-300">{new Date(n.created_at).toLocaleString('tr-TR')}</Text>
+                      {orderId && <View className="flex-row items-center gap-1"><View className="h-1 w-1 rounded-full bg-ink-300" /><Text className="text-[11px] text-ex-red font-medium">Siparişe Git</Text></View>}
+                    </View>
+                  </View>
+                </View>
               </View>
-              <View className="flex-1 min-w-0">
-                <Text className="text-sm font-semibold text-ink-900">{n.title}</Text>
-                <Text className="text-sm text-ink-500 mt-0.5">{n.body}</Text>
-                <Text className="text-[11px] text-ink-300 mt-1.5">{new Date(n.created_at).toLocaleString('tr-TR')}</Text>
-              </View>
-            </View>
-          </View>
-        ))
+            </Pressable>
+          );
+        })
       )}
     </View>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Image, Linking } from 'react-native';
-import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin, Navigation, Clock, Wifi, Car, Phone, MessageCircle } from 'lucide-react-native';
+import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin, Navigation, Clock, Wifi, Car, Phone, MessageCircle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';

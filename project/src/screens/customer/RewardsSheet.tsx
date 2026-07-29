@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { Crown, Zap, Gift, ChevronRight, Star } from 'lucide-react-native';
+import { Crown, Zap, Gift, ChevronRight, Star, Lock, Check } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { TIERS } from '@/data';
@@ -25,6 +25,7 @@ export function RewardsSheet() {
   const points = profile?.points ?? 0;
   const tier = profile?.tier ?? 'Bronz';
   const redeemedIds = new Set(redemptions?.map(r => r.reward_id) ?? []);
+  const stampCount = stamps?.length ?? 0;
 
   const currentTierIdx = TIERS.findIndex(t => t.name === tier);
   const nextTier = TIERS[currentTierIdx + 1];
@@ -49,80 +50,115 @@ export function RewardsSheet() {
   return (
     <Sheet open={open} onClose={closeSheet} title="Sadakat & Ödüller">
       <View className="gap-5">
-        <View className="p-5 rounded-2xl bg-ink-900">
-          <View className="flex-row items-start justify-between mb-4">
-            <View>
-              <Text className="text-[10px] uppercase tracking-wide text-ink-300">Puan bakiyen</Text>
-              <Text className="text-3xl font-bold text-white leading-none mt-1">{points.toLocaleString('tr-TR')}</Text>
-            </View>
-            <View className="h-11 w-11 rounded-2xl bg-ex-red items-center justify-center">
-              <Crown size={20} color="#fff" />
-            </View>
+        {/* Digital loyalty card */}
+        <View className="relative overflow-hidden rounded-3xl bg-ink-900 shadow-premium">
+          <View className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-ex-red/20" />
+          <View className="absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-ex-red/8" />
+          <View className="absolute top-0 right-0 w-32 h-32 opacity-10">
+            <Image source={{ uri: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=200' }} className="h-full w-full" resizeMode="cover" />
           </View>
-          <View className="flex-row items-center justify-between mb-1.5">
-            <View className="flex-row items-center gap-1">
-              <Crown size={11} color="#9494A0" />
-              <Text className="text-xs text-ink-300">{tier}</Text>
+          <View className="relative p-5">
+            <View className="flex-row items-start justify-between mb-5">
+              <View>
+                <View className="flex-row items-center gap-1.5">
+                  <View className="h-7 w-7 rounded-lg bg-ex-red items-center justify-center">
+                    <Text className="text-xs font-extrabold text-white leading-none">X</Text>
+                  </View>
+                  <Text className="text-[11px] font-bold text-white/60 uppercase tracking-widest">Espresso X</Text>
+                </View>
+                <Text className="text-[10px] text-ink-300 mt-3 uppercase tracking-wide">Puan bakiyen</Text>
+                <Text className="text-[40px] font-bold text-white leading-none mt-1 font-display">
+                  {points.toLocaleString('tr-TR')}
+                </Text>
+              </View>
+              <View className="items-end">
+                <View className="px-3 py-1.5 rounded-full bg-white/10 flex-row items-center gap-1.5">
+                  <Crown size={12} color="#C8102E" fill="#C8102E" />
+                  <Text className="text-xs font-bold text-white">{tier}</Text>
+                </View>
+                <Text className="text-[10px] text-ink-400 mt-2">#{profile?.user_id?.slice(0, 8).toUpperCase() ?? 'EX-0000'}</Text>
+              </View>
             </View>
-            <Text className="text-xs text-ink-300">{nextTier ? nextTier.name : 'En üst seviye'}</Text>
+
+            <View className="h-px bg-white/10 mb-4" />
+
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-[11px] text-ink-300 font-medium">{nextTier ? `${nextTier.name} seviyesine` : 'En üst seviye'}</Text>
+              <Text className="text-[11px] font-bold text-white">{tierProgress}%</Text>
+            </View>
+            <View className="h-2 rounded-full bg-ink-800 overflow-hidden">
+              <View className="h-full rounded-full bg-red-gradient" style={{ width: `${tierProgress}%` }} />
+            </View>
+            {nextTier && (
+              <Text className="text-[10px] text-ink-400 mt-2">
+                {(nextTier.minPoints - points).toLocaleString('tr-TR')} puan sonra {nextTier.name}
+              </Text>
+            )}
           </View>
-          <View className="h-2 rounded-full bg-ink-800 overflow-hidden">
-            <View className="h-full bg-ex-red rounded-full" style={{ width: `${tierProgress}%` }} />
-          </View>
-          {nextTier && (
-            <Text className="text-[10px] text-ink-400 mt-1.5">{nextTier.name} seviyesine {(nextTier.minPoints - points).toLocaleString('tr-TR')} puan kaldı</Text>
-          )}
         </View>
 
+        {/* Stats */}
         <View className="flex-row gap-3">
           {[
-            { label: 'Toplam puan', value: (profile?.lifetime_points ?? 0).toLocaleString('tr-TR'), icon: Zap },
+            { label: 'Yaşam boyu', value: (profile?.lifetime_points ?? 0).toLocaleString('tr-TR'), icon: Zap },
             { label: 'Seri', value: `${profile?.streak ?? 0} gün`, icon: Gift },
-            { label: 'Seviye', value: tier, icon: Crown },
+            { label: 'Damga', value: `${stampCount}/10`, icon: Crown },
           ].map(({ label, value, icon: Icon }) => (
-            <Card key={label} className="flex-1 p-3 items-center">
-              <Icon size={16} color="#C8102E" />
-              <Text className="text-sm font-bold text-ink-900 leading-none mt-1">{value}</Text>
+            <Card key={label} className="flex-1 p-3.5 items-center">
+              <View className="h-9 w-9 rounded-xl bg-ex-red/10 items-center justify-center">
+                <Icon size={15} color="#C8102E" />
+              </View>
+              <Text className="text-base font-bold text-ink-900 leading-none mt-2">{value}</Text>
               <Text className="text-[10px] text-ink-400 mt-1">{label}</Text>
             </Card>
           ))}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 px-5 pb-1">
-          {TIERS.map(t => {
-            const isCurrent = t.name === tier;
-            const reached = points >= t.minPoints;
-            return (
-              <View
-                key={t.name}
-                className={cn(
-                  'shrink-0 w-48 p-4 rounded-2xl border',
-                  isCurrent ? 'border-ex-red bg-red-50' : reached ? 'border-ink-200 bg-white' : 'border-ink-100 bg-cream-50 opacity-60',
-                )}
-              >
-                <View className="flex-row items-center gap-2 mb-2">
-                  <View className="h-8 w-8 rounded-xl items-center justify-center" style={{ backgroundColor: t.color }}>
-                    <Crown size={14} color="#fff" />
-                  </View>
-                  <View>
-                    <Text className="text-sm font-bold text-ink-900 leading-none">{t.name}</Text>
-                    <Text className="text-[10px] text-ink-400">{t.minPoints.toLocaleString('tr-TR')}+ puan</Text>
-                  </View>
-                  {isCurrent && <View className="ml-auto px-1.5 py-0.5 rounded-full bg-ex-red"><Text className="text-[8px] font-bold text-white">MEVCUT</Text></View>}
-                </View>
-                <View className="gap-1">
-                  {t.perks.map(perk => (
-                    <View key={perk} className="flex-row items-center gap-1.5">
-                      <Star size={9} color="#C8102E" />
-                      <Text className="text-[10px] text-ink-500 flex-1">{perk}</Text>
+        {/* Tiers */}
+        <View>
+          <Text className="text-xs font-bold text-ink-400 uppercase tracking-wide mb-3">Seviyeler</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 pb-1">
+            {TIERS.map(t => {
+              const isCurrent = t.name === tier;
+              const reached = points >= t.minPoints;
+              return (
+                <View
+                  key={t.name}
+                  className={cn(
+                    'shrink-0 w-52 p-4 rounded-2xl border',
+                    isCurrent ? 'border-ex-red bg-red-50 shadow-soft' : reached ? 'border-ink-200 bg-white' : 'border-ink-100 bg-cream-50 opacity-60',
+                  )}
+                >
+                  <View className="flex-row items-center gap-2 mb-3">
+                    <View className="h-9 w-9 rounded-xl items-center justify-center shadow-soft" style={{ backgroundColor: t.color }}>
+                      <Crown size={15} color="#fff" />
                     </View>
-                  ))}
+                    <View className="flex-1">
+                      <Text className="text-sm font-bold text-ink-900 leading-none">{t.name}</Text>
+                      <Text className="text-[10px] text-ink-400 mt-0.5">{t.minPoints.toLocaleString('tr-TR')}+ puan</Text>
+                    </View>
+                    {isCurrent && (
+                      <View className="px-2 py-0.5 rounded-full bg-ex-red">
+                        <Text className="text-[8px] font-bold text-white uppercase tracking-wide">Şimdi</Text>
+                      </View>
+                    )}
+                    {reached && !isCurrent && <Check size={14} color="#16a34a" />}
+                  </View>
+                  <View className="gap-1.5">
+                    {t.perks.map(perk => (
+                      <View key={perk} className="flex-row items-center gap-1.5">
+                        <Star size={9} color="#C8102E" fill="#C8102E" />
+                        <Text className="text-[10px] text-ink-500 flex-1">{perk}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </ScrollView>
+              );
+            })}
+          </ScrollView>
+        </View>
 
+        {/* Tabs */}
         <View className="flex-row gap-2 p-1 rounded-xl bg-cream-100">
           {([['rewards', 'Ödüller'], ['history', 'Geçmiş']] as const).map(([t, label]) => (
             <Pressable
@@ -154,11 +190,16 @@ export function RewardsSheet() {
                 const alreadyRedeemed = redeemedIds.has(reward.id) && reward.points_cost === 0;
                 return (
                   <Card key={reward.id} className="p-3 flex-row items-center gap-3.5">
-                    <Image source={{ uri: reward.image }} className="h-14 w-14 rounded-xl" resizeMode="cover" />
+                    <Image source={{ uri: reward.image }} className="h-16 w-16 rounded-2xl" resizeMode="cover" />
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-semibold text-ink-900 leading-tight">{reward.title}</Text>
+                      <Text className="text-sm font-bold text-ink-900 leading-tight">{reward.title}</Text>
                       <Text className="text-[11px] text-ink-400 mt-0.5" numberOfLines={1}>{reward.description}</Text>
-                      <Text className="text-xs font-semibold text-ex-red mt-1">{reward.points_cost === 0 ? 'Ücretsiz (doğum günü)' : `${reward.points_cost} puan`}</Text>
+                      <View className="flex-row items-center gap-1.5 mt-1.5">
+                        {canRedeem ? <Zap size={11} color="#C8102E" fill="#C8102E" /> : <Lock size={11} color="#9494A0" />}
+                        <Text className={cn('text-xs font-bold', canRedeem ? 'text-ex-red' : 'text-ink-400')}>
+                          {reward.points_cost === 0 ? 'Ücretsiz (doğum günü)' : `${reward.points_cost} puan`}
+                        </Text>
+                      </View>
                     </View>
                     <Button
                       size="sm"
@@ -166,7 +207,7 @@ export function RewardsSheet() {
                       disabled={!canRedeem || alreadyRedeemed}
                       onPress={() => redeem(reward.id, reward.title, reward.points_cost)}
                     >
-                      {alreadyRedeemed ? 'Kullanıldı' : canRedeem ? 'Kullan' : 'Kilitli'}
+                      {alreadyRedeemed ? 'Bitti' : canRedeem ? 'Kullan' : 'Kilitli'}
                     </Button>
                   </Card>
                 );
@@ -187,20 +228,20 @@ export function RewardsSheet() {
           >
             <Card className="p-0 overflow-hidden">
               {history?.map((h, i) => (
-                <View key={h.id} className={cn('flex-row items-center gap-3 px-4 py-3', i < (history.length - 1) && 'border-b border-ink-100')}>
+                <View key={h.id} className={cn('flex-row items-center gap-3 px-4 py-3.5', i < (history.length - 1) && 'border-b border-ink-100')}>
                   <View className={cn(
-                    'h-9 w-9 rounded-xl items-center justify-center shrink-0',
+                    'h-10 w-10 rounded-xl items-center justify-center shrink-0',
                     h.type === 'earn' ? 'bg-green-50' : h.type === 'bonus' ? 'bg-red-50' : 'bg-ink-100',
                   )}>
-                    {h.type === 'earn' ? <Zap size={15} color="#16a34a" /> :
-                      h.type === 'bonus' ? <Gift size={15} color="#C8102E" /> :
-                      <ChevronRight size={15} color="#9494A0" />}
+                    {h.type === 'earn' ? <Zap size={16} color="#16a34a" /> :
+                      h.type === 'bonus' ? <Gift size={16} color="#C8102E" /> :
+                      <ChevronRight size={16} color="#9494A0" />}
                   </View>
                   <View className="flex-1 min-w-0">
-                    <Text className="text-sm font-medium text-ink-900" numberOfLines={1}>{h.title}</Text>
+                    <Text className="text-sm font-semibold text-ink-900" numberOfLines={1}>{h.title}</Text>
                     <Text className="text-[11px] text-ink-400">{new Date(h.created_at).toLocaleDateString('tr-TR')}</Text>
                   </View>
-                  <Text className={cn('text-sm font-semibold', h.points > 0 ? 'text-green-600' : 'text-ex-red')}>
+                  <Text className={cn('text-sm font-bold', h.points > 0 ? 'text-green-600' : 'text-ex-red')}>
                     {h.points > 0 ? '+' : ''}{h.points}
                   </Text>
                 </View>

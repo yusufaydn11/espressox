@@ -1,5 +1,5 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Flame, Gift, ChevronRight, Tag } from 'lucide-react-native';
+import { Flame, Gift, ChevronRight, Tag } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaigns } from '@/lib/hooks';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Image, ScrollView, TextInput as RNTextInput } from 'react-native';
-import { Plus, Search, Star, Edit2, Trash2, Coffee } from 'lucide-react-native';
+import { Plus, Search, Star, Edit2, Trash2, Coffee } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select, Toggle } from '@/components/ui/Modal';

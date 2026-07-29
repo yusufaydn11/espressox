@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   ScanLine, Camera, CameraOff, Keyboard, CheckCircle2, XCircle,
   User, Gift, Award, RotateCcw, Sparkles, Loader2,
-} from 'lucide-react-native';
+} from 'lucide-react';
 import { supabase, type Profile, type QrCodeRow } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';

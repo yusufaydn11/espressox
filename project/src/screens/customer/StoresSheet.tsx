@@ -1,5 +1,5 @@
 import { View, Text, Pressable, Linking } from 'react-native';
-import { Navigation, Clock, Wifi, Car, Coffee, MapPin, Phone, MessageCircle } from 'lucide-react-native';
+import { Navigation, Clock, Wifi, Car, Coffee, MapPin, Phone, MessageCircle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';

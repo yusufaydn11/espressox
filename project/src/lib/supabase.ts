@@ -73,6 +73,7 @@ export type Store = {
   image_url: string;
   phone: string | null;
   whatsapp: string | null;
+  franchise_id: string | null;
 };
 
 export type Product = {

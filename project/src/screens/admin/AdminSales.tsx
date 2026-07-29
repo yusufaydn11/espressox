@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { DollarSign, TrendingUp, ShoppingCart, Percent } from 'lucide-react-native';
+import { DollarSign, TrendingUp, ShoppingCart, Percent } from 'lucide-react';
 import { StatCard, BarChart, LineChart } from '@/components/ui/Charts';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';

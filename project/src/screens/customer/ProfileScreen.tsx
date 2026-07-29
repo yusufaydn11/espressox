@@ -3,8 +3,8 @@ import { View, Text, Pressable, Image } from 'react-native';
 import {
   Heart, Receipt, CreditCard, MapPin, FileText, Crown, Zap,
   Bell, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
-  UserX,
-} from 'lucide-react-native';
+  UserX, Star, Award, Calendar, Sparkles,
+} from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -34,6 +34,12 @@ export function ProfileScreen() {
     if (error) showToast('Güncelleme başarısız');
     else { showToast('Profil güncellendi'); setEditOpen(false); }
   };
+
+  const stats = [
+    { label: 'Puan', value: (profile?.points ?? 0).toLocaleString('tr-TR'), icon: Zap, accent: true },
+    { label: 'Seri', value: `${profile?.streak ?? 0}g`, icon: Sparkles },
+    { label: 'Seviye', value: profile?.tier ?? 'Bronz', icon: Crown },
+  ];
 
   const menuSections = [
     {
@@ -66,10 +72,12 @@ export function ProfileScreen() {
     <View className="mx-auto max-w-md px-5 pt-4 pb-32 w-full">
       <SectionHeader title="Profil" />
 
-      <Card className="p-5 mb-4">
-        <View className="flex-row items-center gap-4">
+      {/* Identity card */}
+      <Card className="p-5 mb-4 relative overflow-hidden">
+        <View className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-ex-red/5" />
+        <View className="relative flex-row items-center gap-4">
           <View className="relative">
-            <View className="h-16 w-16 rounded-2xl bg-ex-red items-center justify-center overflow-hidden shrink-0 shadow-red">
+            <View className="h-18 w-18 rounded-3xl bg-red-gradient items-center justify-center overflow-hidden shrink-0 shadow-red" style={{ height: 72, width: 72 }}>
               {profile?.avatar_url ? (
                 <Image source={{ uri: profile.avatar_url }} className="h-full w-full" resizeMode="cover" />
               ) : (
@@ -78,59 +86,77 @@ export function ProfileScreen() {
             </View>
             <Pressable
               onPress={() => showToast('Profil fotoğrafı yakında')}
-              className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-ink-900 items-center justify-center shadow-card"
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-ink-900 items-center justify-center shadow-card active:scale-90"
             >
-              <Camera size={11} color="#fff" />
+              <Camera size={12} color="#fff" />
             </Pressable>
           </View>
           <View className="flex-1 min-w-0">
-            <Text className="text-lg font-bold text-ink-900" numberOfLines={1}>{profile?.full_name || 'Üye'}</Text>
-            <Text className="text-xs text-ink-400" numberOfLines={1}>{profile?.phone || 'Telefon eklenmedi'}</Text>
-            <View className="flex-row items-center gap-1.5 mt-1.5">
-              <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-ex-red">
-                <Crown size={10} color="#fff" />
+            <Text className="text-lg font-bold text-ink-900 leading-tight" numberOfLines={1}>{profile?.full_name || 'Üye'}</Text>
+            <Text className="text-xs text-ink-400 mt-0.5" numberOfLines={1}>{profile?.phone || 'İletişim bilgisi yok'}</Text>
+            <View className="flex-row items-center gap-1.5 mt-2">
+              <View className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-red-gradient shadow-red">
+                <Crown size={10} color="#fff" fill="#fff" />
                 <Text className="text-[10px] font-bold text-white">{profile?.tier ?? 'Bronz'}</Text>
               </View>
+              {profile?.birthday && (
+                <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-cream-200">
+                  <Calendar size={9} color="#6E6E78" />
+                  <Text className="text-[10px] font-medium text-ink-500">{profile.birthday}</Text>
+                </View>
+              )}
             </View>
           </View>
           <Pressable
             onPress={() => { setEditName(profile?.full_name ?? ''); setEditPhone(profile?.phone ?? ''); setEditBirthday(profile?.birthday ?? ''); setEditOpen(true); }}
-            className="h-9 w-9 rounded-xl bg-ink-50 items-center justify-center active:bg-ink-100"
+            className="h-10 w-10 rounded-2xl bg-ink-50 items-center justify-center active:bg-ink-100 active:scale-90"
           >
-            <Settings size={16} color="#6E6E78" />
+            <Settings size={17} color="#6E6E78" />
           </Pressable>
         </View>
       </Card>
 
-      <View className="flex-row gap-3 mb-6">
-        {[
-          { label: 'Puan', value: (profile?.points ?? 0).toLocaleString('tr-TR') },
-          { label: 'Seri', value: `${profile?.streak ?? 0}g` },
-          { label: 'Seviye', value: profile?.tier ?? 'Bronz' },
-        ].map(s => (
-          <Card key={s.label} className="flex-1 p-3.5 items-center">
-            <Text className="text-xl font-bold text-ink-900 leading-none">{s.value}</Text>
-            <Text className="text-[10px] text-ink-400 mt-1.5">{s.label}</Text>
+      {/* Stats row */}
+      <View className="flex-row gap-3 mb-4">
+        {stats.map(s => (
+          <Card key={s.label} className={cn('flex-1 p-3.5 items-center', s.accent && 'border-ex-red/20')}>
+            <View className={cn('h-9 w-9 rounded-xl items-center justify-center', s.accent ? 'bg-ex-red/10' : 'bg-cream-100')}>
+              <s.icon size={15} color={s.accent ? '#C8102E' : '#525258'} fill={s.accent ? '#C8102E' : 'transparent'} />
+            </View>
+            <Text className="text-lg font-bold text-ink-900 leading-none mt-2.5">{s.value}</Text>
+            <Text className="text-[10px] text-ink-400 mt-1">{s.label}</Text>
           </Card>
         ))}
       </View>
 
+      {/* Quick actions */}
       <View className="flex-row gap-3 mb-6">
-        <Card onPress={() => openSheet('orders')} className="flex-1 p-4">
-          <Receipt size={20} color="#C8102E" />
-          <Text className="text-sm font-semibold text-ink-900 mt-2">Siparişlerim</Text>
-          <Text className="text-[11px] text-ink-400 mt-0.5">Geçmiş siparişler</Text>
+        <Card onPress={() => openSheet('orders')} className="flex-1 p-4 relative overflow-hidden">
+          <View className="absolute top-0 right-0 h-14 w-14 rounded-full bg-ex-red/5 -mr-7 -mt-7" />
+          <View className="relative">
+            <View className="h-10 w-10 rounded-2xl bg-ex-red/10 items-center justify-center">
+              <Receipt size={18} color="#C8102E" />
+            </View>
+            <Text className="text-sm font-bold text-ink-900 mt-2.5">Siparişlerim</Text>
+            <Text className="text-[11px] text-ink-400 mt-0.5">Geçmiş siparişler</Text>
+          </View>
         </Card>
-        <Card onPress={() => openSheet('rewards')} className="flex-1 p-4">
-          <Heart size={20} color="#C8102E" />
-          <Text className="text-sm font-semibold text-ink-900 mt-2">Ödüllerim</Text>
-          <Text className="text-[11px] text-ink-400 mt-0.5">Puanları kullan</Text>
+        <Card onPress={() => openSheet('rewards')} className="flex-1 p-4 relative overflow-hidden">
+          <View className="absolute top-0 right-0 h-14 w-14 rounded-full bg-ex-red/5 -mr-7 -mt-7" />
+          <View className="relative">
+            <View className="h-10 w-10 rounded-2xl bg-ex-red/10 items-center justify-center">
+              <Heart size={18} color="#C8102E" fill="#C8102E" />
+            </View>
+            <Text className="text-sm font-bold text-ink-900 mt-2.5">Ödüllerim</Text>
+            <Text className="text-[11px] text-ink-400 mt-0.5">Puanları kullan</Text>
+          </View>
         </Card>
       </View>
 
+      {/* Menu sections */}
       {menuSections.map(section => (
         <View key={section.title} className="mb-5">
-          <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">{section.title}</Text>
+          <Text className="text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2.5">{section.title}</Text>
           <Card className="p-0 overflow-hidden">
             {section.items.map((item, i) => (
               <Pressable
@@ -141,8 +167,8 @@ export function ProfileScreen() {
                   i < section.items.length - 1 && 'border-b border-ink-100',
                 )}
               >
-                <View className="h-9 w-9 rounded-xl bg-ink-50 items-center justify-center shrink-0">
-                  <item.icon size={17} color="#525258" />
+                <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
+                  <item.icon size={17} color="#C8102E" />
                 </View>
                 <Text className="flex-1 text-sm font-medium text-ink-900">{item.label}</Text>
                 {item.value ? <Text className="text-xs text-ink-400">{item.value}</Text> : null}
@@ -153,16 +179,17 @@ export function ProfileScreen() {
         </View>
       ))}
 
+      {/* Legal & account */}
       <View className="mb-6">
-        <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">Yasal & Hesap</Text>
+        <Text className="text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2.5">Yasal & Hesap</Text>
         <Card className="p-0 overflow-hidden">
           <LegalEntryButtons />
           <Pressable
             onPress={() => openSheet('account')}
             className="flex-row items-center gap-3 px-4 py-3.5 active:bg-ink-50 border-b border-ink-100"
           >
-            <View className="h-9 w-9 rounded-xl bg-ink-50 items-center justify-center shrink-0">
-              <UserX size={17} color="#525258" />
+            <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
+              <UserX size={17} color="#C8102E" />
             </View>
             <Text className="flex-1 text-sm font-medium text-ink-900">Hesap ve veri yönetimi</Text>
             <ChevronRight size={16} color="#C4C4CC" />
@@ -170,13 +197,16 @@ export function ProfileScreen() {
         </Card>
       </View>
 
-      <View className="flex-row gap-3">
-        <Button variant="outline" full onPress={() => showToast('Ayarlar')}><Settings size={16} /> Ayarlar</Button>
-        <Button variant="outline" full onPress={handleLogout}><LogOut size={16} /> Çıkış yap</Button>
-      </View>
+      <Pressable
+        onPress={handleLogout}
+        className="flex-row items-center justify-center gap-2 w-full py-4 rounded-2xl bg-ex-red/10 border border-ex-red/20 active:bg-ex-red/15 active:scale-[0.98] mb-4"
+      >
+        <LogOut size={20} color="#C8102E" />
+        <Text className="text-base font-bold text-ex-red">Çıkış Yap</Text>
+      </Pressable>
 
       <View className="mt-8 mb-2 flex-row items-center gap-2 justify-center">
-        <View className="h-7 w-7 rounded-lg bg-ex-red items-center justify-center">
+        <View className="h-7 w-7 rounded-lg bg-red-gradient items-center justify-center shadow-red">
           <Text className="text-xs font-bold text-white leading-none">X</Text>
         </View>
         <Text className="text-xs text-ink-300">Espresso X · v2.0 · Kahvenin Sanatı</Text>

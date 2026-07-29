@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Shield, FileText, ChevronRight } from 'lucide-react-native';
+import { Shield, FileText, ChevronRight } from 'lucide-react';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/utils';
 

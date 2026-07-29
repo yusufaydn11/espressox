@@ -11,8 +11,12 @@ type AuthState = {
   loading: boolean;
   isAdmin: boolean;
   isFranchise: boolean;
+  isStoreManager: boolean;
+  isStaff: boolean;
+  isInternal: boolean;
   storeId: string | null;
-  role: 'customer' | 'staff' | 'admin' | 'super_admin' | 'franchise';
+  role: 'customer' | 'staff' | 'store_manager' | 'admin' | 'super_admin' | 'franchise';
+  franchiseId: string | null;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -31,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [franchiseIdState, setFranchiseIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadProfile = useCallback(async (uid: string) => {
@@ -52,9 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('user_id', uid)
       .maybeSingle();
-    if (!error && data) {
-      setUserRole(data as UserRole);
+    if (error) {
+      console.error('Role load error:', error.message);
+      return;
     }
+    const ur = data as UserRole;
+    console.log('[Auth] Loaded role for user', uid, '→', ur?.role ?? 'none');
+    setUserRole(ur);
   }, []);
 
   useEffect(() => {
@@ -77,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        setLoading(true);
         (async () => {
           await Promise.all([loadProfile(s.user.id), loadRole(s.user.id)]);
           if (mounted) setLoading(false);
@@ -84,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setUserRole(null);
+        setFranchiseIdState(null);
         if (mounted) setLoading(false);
       }
     });
@@ -110,10 +121,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile, loadRole]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: translateError(error.message) };
+    // Wait for role + profile to load so App.tsx can route correctly
+    if (data.user) {
+      await Promise.all([loadProfile(data.user.id), loadRole(data.user.id)]);
+    }
     return { error: null };
-  }, []);
+  }, [loadProfile, loadRole]);
 
   const signInWithGoogle = useCallback(async () => {
     return { error: 'Google ile giriş mobil uygulama üzerinden yakında aktif olacak. Şimdilik e-posta ile giriş yapın.' };
@@ -190,10 +205,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const role = userRole?.role ?? 'customer';
   const isAdmin = role === 'admin' || role === 'super_admin';
   const isFranchise = role === 'franchise';
+  const isStoreManager = role === 'store_manager';
+  const isStaff = role === 'staff';
+  const isInternal = isFranchise || isStoreManager || isStaff || isAdmin;
   const storeId = userRole?.store_id ?? null;
 
+  // Fetch franchise_id from stores table when storeId is available
+  useEffect(() => {
+    if (!storeId) { setFranchiseIdState(null); return; }
+    supabase.from('stores').select('franchise_id').eq('id', storeId).maybeSingle()
+      .then(({ data }) => {
+        setFranchiseIdState((data as { franchise_id: string | null })?.franchise_id ?? null);
+      });
+  }, [storeId]);
+
   const value: AuthState = {
-    user, session, profile, loading, isAdmin, isFranchise, storeId, role,
+    user, session, profile, loading, isAdmin, isFranchise, isStoreManager, isStaff, isInternal, storeId, role, franchiseId: franchiseIdState,
     signUp, signIn, signInWithGoogle, signInWithApple,
     signOut, resetPassword, refreshProfile, updateProfile, deleteAccount,
   };

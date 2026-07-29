@@ -4,7 +4,7 @@ import {
   LayoutDashboard, TrendingUp, Users, ShoppingBag, Coffee, Megaphone, Gift,
   Bell, Tag, MapPin, UserCog, BarChart3, LogOut, Menu as MenuIcon, X,
   ArrowLeft, ScanLine, Store,
-} from 'lucide-react-native';
+} from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +55,9 @@ export function AdminApp() {
 
   return (
     <View className="flex-1 bg-cream-50 flex-row">
+      <View style={{ backgroundColor: '#ff0000', paddingVertical: 6, paddingHorizontal: 12, position: 'absolute', top: 0, right: 0, zIndex: 9999 }}>
+        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>ADMINAPP ACTIVE</Text>
+      </View>
       {sidebarOpen && (
         <Pressable className="absolute inset-0 z-40 bg-ink-950/40" onPress={() => setSidebarOpen(false)} />
       )}

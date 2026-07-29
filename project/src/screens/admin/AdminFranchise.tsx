@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
   Store, UserPlus, Trash2, KeyRound, Copy, Check, Loader2,
   Building2, Mail, MapPin, X, ShieldCheck, RefreshCw,
-} from 'lucide-react-native';
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 import { Card } from '@/components/ui/Card';

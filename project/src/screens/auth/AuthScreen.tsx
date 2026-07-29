@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput as RNTextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Coffee, CheckCircle2, ArrowLeft } from 'lucide-react-native';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Coffee, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 

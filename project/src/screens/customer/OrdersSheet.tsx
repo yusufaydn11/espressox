@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native';
-import { RotateCcw, ShoppingBag } from 'lucide-react-native';
+import { RotateCcw, ShoppingBag } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useOrders } from '@/lib/hooks';
 import { Sheet } from '@/components/ui/Sheet';

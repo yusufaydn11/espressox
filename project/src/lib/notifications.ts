@@ -30,7 +30,7 @@ export function usePushNotifications() {
 
     if (finalStatus !== 'granted') return;
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const projectId = (Constants as unknown as { expoConfig?: { extra?: { eas?: { projectId?: string } } } }).expoConfig?.extra?.eas?.projectId;
     if (!projectId) return;
 
     const token = (await Notifications.getExpoPushTokenAsync({

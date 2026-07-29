@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native';
-import { Home, Coffee, QrCode, Gift, User } from 'lucide-react-native';
+import { Home, Coffee, QrCode, Gift, User } from 'lucide-react';
 import { useApp, type Tab } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 
