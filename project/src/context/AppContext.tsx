@@ -7,11 +7,12 @@ import { supabase } from '@/lib/supabase';
 import { fetchEarnRate, addPoints as addPointsService, spendPoints as spendPointsService } from '@/services/loyalty';
 import { DEFAULT_EARN_RATE } from '@shared/constants/loyalty';
 import { computeCartPoints } from '@shared/utils/loyalty';
+import { normalizeToast, type ToastMessage } from '@shared/types/toast';
 
 type Theme = 'light' | 'dark';
 type Role = 'customer' | 'admin';
 export type Tab = 'home' | 'menu' | 'qr' | 'campaigns' | 'profile';
-type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'account' | 'qr' | 'rewards' | 'orders' | 'reset-password' | null;
+type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'notification-inbox' | 'account' | 'qr' | 'rewards' | 'orders' | 'reset-password' | null;
 
 export type LastOrder = {
   orderNumber: string;
@@ -51,8 +52,8 @@ interface AppState {
   addPoints: (n: number) => void;
   spendPoints: (n: number) => void;
 
-  toast: string | null;
-  showToast: (msg: string) => void;
+  toast: ToastMessage | null;
+  showToast: (msg: string | ToastMessage) => void;
 
   lastOrder: LastOrder | null;
   setLastOrder: (order: LastOrder | null) => void;
@@ -80,7 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sheet, setSheet] = useState<SheetView>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
   const [earnRate, setEarnRate] = useState(DEFAULT_EARN_RATE);
 
@@ -98,8 +99,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleTheme = useCallback(() => setTheme(t => (t === 'light' ? 'dark' : 'light')), []);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
+  const showToast = useCallback((msg: string | ToastMessage) => {
+    setToast(normalizeToast(msg));
     setTimeout(() => setToast(null), 2600);
   }, []);
 

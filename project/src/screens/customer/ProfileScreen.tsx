@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import {
   Heart, Receipt, CreditCard, MapPin, FileText, Crown, Zap,
-  Bell, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
+  Bell, Inbox, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
   UserX, Calendar, Sparkles,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -62,7 +62,8 @@ export function ProfileScreen() {
     {
       title: 'Tercihler',
       items: [
-        { icon: Bell, label: 'Bildirimler', value: 'Açık', action: () => openSheet('notifications') },
+        { icon: Inbox, label: 'Bildirimler', value: 'Merkez', action: () => openSheet('notification-inbox') },
+        { icon: Bell, label: 'Bildirim ayarları', value: 'Tercihler', action: () => openSheet('notifications') },
         { icon: Globe, label: 'Dil', value: lang, action: () => setLang(l => l === 'Türkçe' ? 'English' : 'Türkçe') },
       ],
     },

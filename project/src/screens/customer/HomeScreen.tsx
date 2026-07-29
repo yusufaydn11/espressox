@@ -1,221 +1,251 @@
-import { View, Text, Pressable, ScrollView, Image } from 'react-native';
-import { Coffee, Crown, Gift, MapPin, ChevronRight, Flame, Sparkles, QrCode as QrIcon, Star } from 'lucide-react';
+import { View, Text } from 'react-native';
+import { Gift, MapPin, RotateCcw, Flame, Megaphone } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { useStores, useProducts } from '@/lib/hooks';
+import { useStores, useProducts, useOrders, useCampaigns, useLoyaltyStamps } from '@/lib/hooks';
 import { Card } from '@/components/ui/Card';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
+import { ErrorState } from '@/components/ui/States';
+import {
+  HomeHero,
+  ProductCarousel,
+  HomeQuickLink,
+  HomeSectionHeader,
+  HomeSkeleton,
+  CustomerEmptyCard,
+} from '@/components/customer';
 import { TIERS } from '@shared/constants/loyalty';
-import { formatPoints } from '@shared/utils/loyalty';
 import { mapRetailDbProductsToUi, filterRetailPopularProducts } from '@shared/utils/products';
 import type { RetailProductDbRow } from '@shared/types/products';
-import type { Product } from '@/types';
+import { formatPrice } from '@/lib/utils';
+import type { Store } from '@/lib/supabase';
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Günaydın';
+  if (h < 18) return 'İyi günler';
+  return 'İyi akşamlar';
+}
+
+function normalizeTierName(tier: string): string {
+  const map: Record<string, string> = {
+    Gumus: 'Gümüş',
+    Gümüş: 'Gümüş',
+    Altin: 'Altın',
+    Altın: 'Altın',
+  };
+  return map[tier] ?? tier;
+}
+
+function getTierProgress(tier: string, points: number) {
+  const normalized = normalizeTierName(tier);
+  const idx = TIERS.findIndex(t => t.name === normalized);
+  const current = idx >= 0 ? TIERS[idx] : TIERS[0];
+  const next = idx >= 0 ? TIERS[idx + 1] : TIERS[1];
+
+  if (!next) {
+    return { progress: 100, pointsToNext: 0, label: 'En üst seviye' };
+  }
+
+  const range = next.minPoints - current.minPoints;
+  const progress = range > 0
+    ? Math.min(100, ((points - current.minPoints) / range) * 100)
+    : 0;
+
+  return {
+    progress,
+    pointsToNext: Math.max(0, next.minPoints - points),
+    label: `${next.name} seviyeye`,
+  };
+}
+
+function pickFeaturedStore(stores: Store[] | null | undefined, favoriteStoreId?: string | null): Store | undefined {
+  if (!stores?.length) return undefined;
+  if (favoriteStoreId) {
+    const fav = stores.find(s => s.id === favoriteStoreId);
+    if (fav) return fav;
+  }
+  return stores[0];
+}
 
 export function HomeScreen() {
-  const { setTab, openSheet, points, favorites } = useApp();
+  const { setTab, openSheet, points, favorites, showToast } = useApp();
   const { profile } = useAuth();
-  const { data: stores } = useStores();
-  const { data: dbProducts } = useProducts();
+  const { data: stores, loading: storesLoading, error: storesError } = useStores();
+  const { data: dbProducts, loading: productsLoading, error: productsError, reload: reloadProducts } = useProducts();
+  const { data: orders, loading: ordersLoading } = useOrders();
+  const { data: campaigns, loading: campaignsLoading } = useCampaigns();
+  const { data: stamps } = useLoyaltyStamps();
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Günaydın';
-    if (h < 18) return 'İyi günler';
-    return 'İyi akşamlar';
-  })();
+  const loading = productsLoading && !dbProducts;
+  const error = productsError;
+
+  if (loading) return <HomeSkeleton />;
+
+  if (error) {
+    return (
+      <View className="mx-auto max-w-md pb-32 w-full">
+        <ErrorState message={error} onRetry={reloadProducts} />
+      </View>
+    );
+  }
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Kahve Sevdalısı';
-  const nearestStore = stores?.[0];
   const tier = profile?.tier ?? 'Bronz';
-
-  const products = mapRetailDbProductsToUi((dbProducts ?? []).slice(0, 6) as RetailProductDbRow[]);
-
-  const popular = filterRetailPopularProducts(products).slice(0, 4);
-  const favProducts = products.filter(p => favorites.includes(p.id));
-  const siyahMin = TIERS.find(t => t.name === 'Siyah')?.minPoints ?? 7000;
-  const tierProgress = Math.min(100, (points / siyahMin) * 100);
+  const tierMeta = getTierProgress(tier, points);
+  const products = mapRetailDbProductsToUi((dbProducts ?? []) as RetailProductDbRow[]);
+  const popular = filterRetailPopularProducts(products).slice(0, 6);
+  const favProducts = products.filter(p => favorites.includes(p.id)).slice(0, 6);
+  const featuredStore = pickFeaturedStore(stores, profile?.favorite_store_id);
+  const stampCount = stamps?.filter(s => !s.redeemed).length ?? 0;
+  const lastOrder = orders?.[0];
+  const campaignPreview = campaigns?.slice(0, 2) ?? [];
 
   return (
     <View className="mx-auto max-w-md pb-32 w-full">
-      {/* Greeting */}
-      <View className="px-5 pt-5">
-        <Text className="text-sm text-ink-400 font-medium">{greeting},</Text>
-        <Text className="text-[30px] font-bold text-ink-900 leading-tight mt-0.5 font-display">{firstName}</Text>
+      <HomeHero
+        greeting={getGreeting()}
+        firstName={firstName}
+        tier={tier}
+        points={points}
+        tierProgress={tierMeta.progress}
+        pointsToNextTier={tierMeta.pointsToNext}
+        nextTierLabel={tierMeta.label}
+        stampCount={stampCount}
+        onOpenRewards={() => openSheet('rewards')}
+        onOpenQr={() => setTab('qr')}
+        onOrder={() => setTab('menu')}
+      />
+
+      {(profile?.streak ?? 0) > 0 && (
+        <View className="px-5 mt-3">
+          <Card className="p-4 flex-row items-center gap-3 relative overflow-hidden">
+            <View className="absolute left-0 top-0 bottom-0 w-1 bg-ex-red rounded-l-2xl" />
+            <View className="h-11 w-11 rounded-2xl bg-ex-red/10 items-center justify-center">
+              <Flame size={20} color="#C8102E" fill="#C8102E" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-ink-900">{profile?.streak} günlük seri</Text>
+              <Text className="text-[11px] text-ink-400 mt-0.5">Serini koru, bonus puan kazan</Text>
+            </View>
+            <View className="px-2.5 py-1 rounded-full bg-ex-red/10">
+              <Text className="text-[10px] font-bold text-ex-red uppercase tracking-wide">Aktif</Text>
+            </View>
+          </Card>
+        </View>
+      )}
+
+      {popular.length > 0 ? (
+        <ProductCarousel
+          title="Popüler"
+          products={popular}
+          onSeeAll={() => setTab('menu')}
+        />
+      ) : (
+        <View className="px-5 mt-7">
+          <CustomerEmptyCard preset="products" actionLabel="Menüye git" onAction={() => setTab('menu')} />
+        </View>
+      )}
+
+      <View className="mt-6">
+        <HomeSectionHeader title="Favori ürünler" subtitle="Senin için seçtiklerimiz" />
+        {favProducts.length > 0 ? (
+          <ProductCarousel title="" products={favProducts} icon="sparkles" showHeader={false} />
+        ) : (
+          <View className="px-5">
+            <CustomerEmptyCard
+              preset="favorites"
+              actionLabel="Menüyü keşfet"
+              onAction={() => setTab('menu')}
+            />
+          </View>
+        )}
       </View>
 
-      {/* Loyalty hero card */}
-      <View className="px-5 mt-5">
-        <Card className="relative overflow-hidden">
-          <View className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-ex-red/8" />
-          <View className="absolute -right-6 -bottom-10 h-28 w-28 rounded-full bg-ex-red/5" />
-          <View className="relative p-5">
+      <View className="mt-6 px-5">
+        <HomeSectionHeader
+          title="Tekrar sipariş"
+          subtitle="Son siparişinden hızlıca devam et"
+          actionLabel="Tümü"
+          onAction={() => openSheet('orders')}
+        />
+        {!ordersLoading && lastOrder ? (
+          <Card className="p-4">
             <View className="flex-row items-start justify-between">
-              <View>
-                <View className="flex-row items-center gap-1.5">
-                  <Crown size={15} color="#C8102E" fill="#C8102E" />
-                  <Text className="text-[11px] font-bold text-ex-red uppercase tracking-widest">{tier} Üye</Text>
-                </View>
-                <Text className="text-[34px] font-bold text-ink-900 mt-2 font-display leading-none">
-                  {formatPoints(points)}
-                  <Text className="text-base font-normal text-ink-400 font-sans"> puan</Text>
+              <View className="flex-1 min-w-0">
+                <Text className="text-xs text-ink-400">{lastOrder.order_number}</Text>
+                <Text className="text-sm font-semibold text-ink-900 mt-0.5" numberOfLines={1}>
+                  {lastOrder.store_name}
+                </Text>
+                <Text className="text-xs text-ink-500 mt-1" numberOfLines={2}>
+                  {lastOrder.order_items?.slice(0, 2).map(i => i.name).join(' · ')}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => openSheet('rewards')}
-                className="h-10 w-10 rounded-2xl bg-ink-50 items-center justify-center active:bg-ink-100 active:scale-90"
-              >
-                <ChevronRight size={18} color="#6E6E78" />
-              </Pressable>
+              <Text className="text-sm font-bold text-ex-red ml-2">
+                {formatPrice(Number(lastOrder.total))}
+              </Text>
             </View>
-            <View className="mt-5">
-              <View className="flex-row items-center justify-between mb-2">
-                <Text className="text-[11px] text-ink-400 font-medium">Siyah seviyeye</Text>
-                <Text className="text-[11px] font-bold text-ex-red">{formatPoints(siyahMin - points)} puan</Text>
-              </View>
-              <View className="h-2 rounded-full bg-ink-100 overflow-hidden">
-                <View className="h-full rounded-full bg-red-gradient" style={{ width: `${tierProgress}%` }} />
-              </View>
-            </View>
-          </View>
-        </Card>
-      </View>
-
-      {/* Quick actions */}
-      <View className="px-5 mt-4 flex-row gap-3">
-        <Pressable onPress={() => setTab('menu')} className="flex-1 active:scale-[0.97]">
-          <Card className="p-4 relative overflow-hidden">
-            <View className="absolute top-0 right-0 h-16 w-16 rounded-full bg-ex-red/5 -mr-8 -mt-8" />
-            <View className="relative h-12 w-12 rounded-2xl bg-red-gradient items-center justify-center shadow-red">
-              <Coffee size={22} color="#fff" />
-            </View>
-            <Text className="text-base font-bold text-ink-900 mt-3">Sipariş Ver</Text>
-            <Text className="text-[11px] text-ink-400 mt-0.5">2 dokunuşla hazır</Text>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 self-start"
+              onPress={() => showToast(`${lastOrder.order_number} yeniden sipariş ediliyor…`)}
+            >
+              <RotateCcw size={13} /> Tekrar sipariş
+            </Button>
           </Card>
-        </Pressable>
-        <Pressable onPress={() => setTab('qr')} className="flex-1 active:scale-[0.97]">
-          <Card className="p-4 relative overflow-hidden">
-            <View className="absolute top-0 right-0 h-16 w-16 rounded-full bg-ink-900/5 -mr-8 -mt-8" />
-            <View className="relative h-12 w-12 rounded-2xl bg-ink-900 items-center justify-center shadow-soft">
-              <QrIcon size={22} color="#fff" />
-            </View>
-            <Text className="text-base font-bold text-ink-900 mt-3">QR Kartım</Text>
-            <Text className="text-[11px] text-ink-400 mt-0.5">Okut, puan kazan</Text>
-          </Card>
-        </Pressable>
+        ) : (
+          <CustomerEmptyCard
+            preset="orders"
+            actionLabel="Sipariş ver"
+            onAction={() => setTab('menu')}
+          />
+        )}
       </View>
 
-      {/* Streak banner */}
-      <View className="px-5 mt-3">
-        <Card className="p-4 flex-row items-center gap-3 relative overflow-hidden">
-          <View className="absolute left-0 top-0 bottom-0 w-1 bg-ex-red" />
-          <View className="h-11 w-11 rounded-2xl bg-ex-red/10 items-center justify-center">
-            <Flame size={20} color="#C8102E" fill="#C8102E" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-bold text-ink-900">{profile?.streak ?? 14} günlük seri</Text>
-            <Text className="text-[11px] text-ink-400 mt-0.5">Yarın +50 bonus puan kazanırsın</Text>
-          </View>
-          <View className="px-2.5 py-1 rounded-full bg-ex-red/10">
-            <Text className="text-[10px] font-bold text-ex-red uppercase tracking-wide">Aktif</Text>
-          </View>
-        </Card>
-      </View>
-
-      {/* Popular */}
-      {popular.length > 0 && (
-        <View className="mt-7">
-          <View className="flex-row items-center justify-between px-5 mb-3.5">
-            <View className="flex-row items-center gap-2">
-              <View className="h-6 w-1 rounded-full bg-ex-red" />
-              <Text className="text-xl font-bold text-ink-900 font-display">Popüler</Text>
-            </View>
-            <Pressable onPress={() => setTab('menu')} className="flex-row items-center gap-0.5 active:opacity-60">
-              <Text className="text-xs font-semibold text-ex-red">Tümünü gör</Text>
-              <ChevronRight size={14} color="#C8102E" />
-            </Pressable>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="px-5 pb-2 gap-3.5">
-            {popular.map(p => <PopularItem key={p.id} product={p} />)}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Favorites / For you */}
-      {favProducts.length > 0 && (
-        <View className="mt-6">
-          <View className="flex-row items-center gap-2 px-5 mb-3.5">
-            <Sparkles size={18} color="#C8102E" fill="#C8102E" />
-            <Text className="text-xl font-bold text-ink-900 font-display">Senin için</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="px-5 pb-2 gap-3.5">
-            {favProducts.map(p => <PopularItem key={p.id} product={p} />)}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Quick links */}
       <View className="px-5 mt-6 gap-2.5">
-        {nearestStore && <QuickLink icon={MapPin} label={nearestStore.name} sub={`${nearestStore.hours} · ${nearestStore.open ? 'Açık' : 'Kapalı'}`} badge={nearestStore.open ? 'Açık' : 'Kapalı'} onClick={() => openSheet('stores')} />}
-        <QuickLink icon={Gift} label="Kampanyalar" sub="Sana özel fırsatlar" onClick={() => setTab('campaigns')} />
-        <QuickLink icon={Coffee} label="Siparişlerim" sub="Geçmiş ve aktif siparişler" onClick={() => openSheet('orders')} />
+        {featuredStore && !storesError && (
+          <HomeQuickLink
+            icon={MapPin}
+            label={featuredStore.name}
+            sub={`${featuredStore.hours} · ${featuredStore.open ? 'Açık' : 'Kapalı'}`}
+            badge={featuredStore.open ? 'Açık' : 'Kapalı'}
+            onPress={() => openSheet('stores')}
+          />
+        )}
+        {storesLoading && !featuredStore && (
+          <Card className="p-4 h-16 justify-center">
+            <Text className="text-xs text-ink-400">Mağazalar yükleniyor…</Text>
+          </Card>
+        )}
+
+        {!campaignsLoading && campaignPreview.length > 0 ? (
+          campaignPreview.map(c => (
+            <HomeQuickLink
+              key={c.id}
+              icon={Megaphone}
+              label={c.title || c.name || 'Kampanya'}
+              sub={c.message ?? 'Sana özel fırsat'}
+              onPress={() => setTab('campaigns')}
+            />
+          ))
+        ) : !campaignsLoading ? (
+          <CustomerEmptyCard
+            preset="campaigns"
+            actionLabel="Kampanyalara git"
+            onAction={() => setTab('campaigns')}
+          />
+        ) : (
+          <HomeQuickLink icon={Gift} label="Kampanyalar" sub="Yükleniyor…" onPress={() => setTab('campaigns')} />
+        )}
+
+        <HomeQuickLink
+          icon={Gift}
+          label="Siparişlerim"
+          sub="Geçmiş ve aktif siparişler"
+          onPress={() => openSheet('orders')}
+        />
       </View>
     </View>
-  );
-}
-
-function PopularItem({ product }: { product: Product }) {
-  const { setSelectedProduct, openSheet } = useApp();
-  return (
-    <Pressable
-      onPress={() => { setSelectedProduct(product); openSheet('product'); }}
-      className="w-40 shrink-0 active:scale-[0.97]"
-    >
-      <View className="relative h-44 w-40 rounded-3xl overflow-hidden bg-ink-100 shadow-lifted">
-        <Image source={{ uri: product.image }} className="h-full w-full" resizeMode="cover" />
-        <View className="absolute inset-0 bg-gradient-to-t from-ink-950/70 via-transparent to-transparent" />
-        {product.aiRecommended && (
-          <View className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-white/95 flex-row items-center gap-0.5 shadow-soft">
-            <Sparkles size={9} color="#C8102E" />
-            <Text className="text-[9px] font-bold text-ex-red">ÖNERİLEN</Text>
-          </View>
-        )}
-        <View className="absolute bottom-3 left-3 right-3">
-          <Text className="text-white font-semibold text-sm leading-tight" numberOfLines={1}>{product.name}</Text>
-          <View className="flex-row items-center gap-1.5 mt-0.5">
-            <Text className="text-white font-bold text-sm">₺{product.price.toLocaleString('tr-TR')}</Text>
-            <View className="h-1 w-1 rounded-full bg-white/50" />
-            <View className="flex-row items-center gap-0.5">
-              <Star size={8} color="#FFD66B" fill="#FFD66B" />
-              <Text className="text-white/80 text-[10px]">{product.rating}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function QuickLink({ icon: Icon, label, sub, badge, onClick }: { icon: typeof Gift; label: string; sub: string; badge?: string; onClick: () => void }) {
-  return (
-    <Pressable
-      onPress={onClick}
-      className="active:scale-[0.98]"
-    >
-      <Card className="p-4 flex-row items-center gap-3.5">
-        <View className="h-11 w-11 rounded-2xl bg-cream-100 items-center justify-center">
-          <Icon size={19} color="#C8102E" />
-        </View>
-        <View className="flex-1">
-          <Text className="text-sm font-bold text-ink-900" numberOfLines={1}>{label}</Text>
-          <Text className="text-[11px] text-ink-400 mt-0.5" numberOfLines={1}>{sub}</Text>
-        </View>
-        {badge && (
-          <View className={cn('px-2 py-0.5 rounded-full', badge === 'Açık' ? 'bg-green-50' : 'bg-red-50')}>
-            <Text className={cn('text-[10px] font-bold uppercase tracking-wide', badge === 'Açık' ? 'text-green-600' : 'text-ex-red')}>{badge}</Text>
-          </View>
-        )}
-        <ChevronRight size={18} color="#C4C4CC" />
-      </Card>
-    </Pressable>
   );
 }

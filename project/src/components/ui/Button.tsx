@@ -1,8 +1,9 @@
 import { Pressable, type PressableProps } from 'react-native';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { buttonClasses, type ButtonClassVariant } from '@shared/design/classNames';
 
-type Variant = 'primary' | 'gold' | 'dark' | 'outline' | 'ghost' | 'subtle';
+type Variant = ButtonClassVariant;
 type Size = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
@@ -12,15 +13,6 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   full?: boolean;
   className?: string;
 }
-
-const variants: Record<Variant, string> = {
-  primary: 'bg-ex-red text-white active:bg-ex-redDark active:scale-[0.98] shadow-red',
-  gold: 'bg-ex-red text-white font-semibold shadow-red active:bg-ex-redDark active:scale-[0.98]',
-  dark: 'bg-ink-900 text-white active:bg-ink-800 active:scale-[0.98]',
-  outline: 'border border-ink-200 text-ink-900 bg-white active:border-ink-300 active:bg-ink-50 active:scale-[0.98]',
-  ghost: 'text-ink-700 active:bg-ink-100 active:scale-[0.98]',
-  subtle: 'bg-ink-100 text-ink-700 active:bg-ink-200 active:scale-[0.98]',
-};
 
 const sizes: Record<Size, string> = {
   sm: 'px-4 py-2.5 text-xs rounded-xl gap-1.5',
@@ -40,7 +32,7 @@ export function Button({
     <Pressable
       className={cn(
         'flex flex-row items-center justify-center font-medium active:opacity-90 disabled:opacity-40',
-        variants[variant],
+        buttonClasses[variant],
         sizes[size],
         full && 'w-full',
         className,

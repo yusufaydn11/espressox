@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { ShoppingBag } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { formatPrice } from '@/lib/utils';
 import { CustomerHeader } from '@/components/CustomerHeader';
 import { BottomNav } from '@/components/BottomNav';
@@ -17,11 +19,25 @@ import { PromotionsSheet } from '@/screens/customer/PromotionsSheet';
 import { StoresSheet } from '@/screens/customer/StoresSheet';
 import { AiAssistantSheet } from '@/screens/customer/AiAssistantSheet';
 import { NotificationSettingsSheet } from '@/screens/customer/NotificationSettingsSheet';
+import { NotificationCenterSheet } from '@/screens/customer/NotificationCenterSheet';
 import { AccountSettingsSheet } from '@/screens/customer/AccountSettingsSheet';
 import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
+import { OnboardingFlow } from '@/screens/customer/OnboardingFlow';
+import { hasCompletedOnboarding } from '@/lib/onboarding';
 
 export function CustomerApp() {
   const { tab, cartCount, cartTotal, openSheet } = useApp();
+  const { user } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void hasCompletedOnboarding(user.id).then(done => {
+      setShowOnboarding(!done);
+      setOnboardingChecked(true);
+    });
+  }, [user?.id]);
 
   return (
     <View className="flex-1 bg-cream-50">
@@ -67,10 +83,18 @@ export function CustomerApp() {
       <StoresSheet />
       <AiAssistantSheet />
       <NotificationSettingsSheet />
+      <NotificationCenterSheet />
       <AccountSettingsSheet />
       <PasswordResetSheet />
       <RewardsSheet />
       <OrdersSheet />
+
+      {onboardingChecked && showOnboarding && user?.id && (
+        <OnboardingFlow
+          userId={user.id}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
     </View>
   );
 }
