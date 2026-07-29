@@ -6,7 +6,9 @@ import {
   ArrowLeft, ScanLine, Store,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { useAdmin } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
+import { LoadingState } from '@/components/ui/States';
 
 import { AdminDashboard } from '@/screens/admin/AdminDashboard';
 import { AdminSales } from '@/screens/admin/AdminSales';
@@ -48,6 +50,7 @@ const groups = ['Genel Bakış', 'Operasyonlar', 'CRM', 'Pazarlama'];
 
 export function AdminApp() {
   const { setRole } = useApp();
+  const { loading } = useAdmin();
   const [page, setPage] = useState<AdminPage>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -55,9 +58,6 @@ export function AdminApp() {
 
   return (
     <View className="flex-1 bg-cream-50 flex-row">
-      <View style={{ backgroundColor: '#ff0000', paddingVertical: 6, paddingHorizontal: 12, position: 'absolute', top: 0, right: 0, zIndex: 9999 }}>
-        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>ADMINAPP ACTIVE</Text>
-      </View>
       {sidebarOpen && (
         <Pressable className="absolute inset-0 z-40 bg-ink-950/40" onPress={() => setSidebarOpen(false)} />
       )}
@@ -72,7 +72,7 @@ export function AdminApp() {
           </View>
           <View className="flex-1">
             <Text className="text-base font-bold text-ink-900 leading-none">Espresso X</Text>
-            <Text className="text-[10px] text-ex-red mt-1 font-medium tracking-wide">Yönetim Paneli</Text>
+            <Text className="text-[10px] text-ex-red mt-1 font-medium tracking-wide">HQ Yönetim</Text>
           </View>
           <Pressable onPress={() => setSidebarOpen(false)}><X size={20} color="#9494A0" /></Pressable>
         </View>
@@ -140,20 +140,26 @@ export function AdminApp() {
         </View>
 
         <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
-          {page === 'dashboard' && <AdminDashboard />}
-          {page === 'sales' && <AdminSales />}
-          {page === 'customers' && <AdminCustomers />}
-          {page === 'orders' && <AdminOrders />}
-          {page === 'products' && <AdminProducts />}
-          {page === 'campaigns' && <AdminCampaigns />}
-          {page === 'loyalty' && <AdminLoyalty />}
-          {page === 'push' && <AdminPush />}
-          {page === 'coupons' && <AdminCoupons />}
-          {page === 'stores' && <AdminStores />}
-          {page === 'employees' && <AdminEmployees />}
-          {page === 'analytics' && <AdminAnalytics />}
-          {page === 'scanner' && <AdminScanner />}
-          {page === 'franchise' && <AdminFranchise />}
+          {loading && page !== 'dashboard' ? (
+            <LoadingState label="Veriler yükleniyor…" />
+          ) : (
+            <>
+              {page === 'dashboard' && <AdminDashboard />}
+              {page === 'sales' && <AdminSales />}
+              {page === 'customers' && <AdminCustomers />}
+              {page === 'orders' && <AdminOrders />}
+              {page === 'products' && <AdminProducts />}
+              {page === 'campaigns' && <AdminCampaigns />}
+              {page === 'loyalty' && <AdminLoyalty />}
+              {page === 'push' && <AdminPush />}
+              {page === 'coupons' && <AdminCoupons />}
+              {page === 'stores' && <AdminStores />}
+              {page === 'employees' && <AdminEmployees />}
+              {page === 'analytics' && <AdminAnalytics />}
+              {page === 'scanner' && <AdminScanner />}
+              {page === 'franchise' && <AdminFranchise />}
+            </>
+          )}
         </ScrollView>
       </View>
     </View>

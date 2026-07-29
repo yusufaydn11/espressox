@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { AdminLayout } from './screens/AdminLayout';
@@ -11,20 +12,30 @@ import { CampaignsScreen } from './screens/CampaignsScreen';
 import { CouponsScreen } from './screens/CouponsScreen';
 import { RewardsScreen } from './screens/RewardsScreen';
 import { LoyaltyScreen } from './screens/LoyaltyScreen';
-import { CustomersScreen } from './screens/CustomersScreen';
+import { CrmScreen } from './screens/crm/CrmScreen';
+import { CustomerDetailScreen } from './screens/crm/CustomerDetailScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
 import { StoresScreen } from './screens/StoresScreen';
 import { FranchisesScreen } from './screens/FranchisesScreen';
 import { EmployeesScreen } from './screens/EmployeesScreen';
 import { InventoryScreen } from './screens/InventoryScreen';
-import { AnalyticsScreen } from './screens/AnalyticsScreen';
-import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { B2BOrdersScreen } from './screens/B2BOrdersScreen';
 import { B2BOrderDetailScreen } from './screens/B2BOrderDetailScreen';
 import { B2BProductsScreen } from './screens/B2BProductsScreen';
 import type { AdminRole } from './lib/supabase';
 import { HQ_ROLES } from './lib/roles';
+
+const AnalyticsScreen = lazy(() => import('./screens/AnalyticsScreen').then(m => ({ default: m.AnalyticsScreen })));
+const ReportsScreen = lazy(() => import('./screens/ReportsScreen').then(m => ({ default: m.ReportsScreen })));
+const StorePerformanceScreen = lazy(() => import('./screens/hq/StorePerformanceScreen').then(m => ({ default: m.StorePerformanceScreen })));
+const StoreDetailScreen = lazy(() => import('./screens/hq/StoreDetailScreen').then(m => ({ default: m.StoreDetailScreen })));
+const FinanceScreen = lazy(() => import('./screens/hq/FinanceScreen').then(m => ({ default: m.FinanceScreen })));
+const FranchiseFinanceScreen = lazy(() => import('./screens/hq/FranchiseFinanceScreen').then(m => ({ default: m.FranchiseFinanceScreen })));
+
+function LazyScreen({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<Spinner label="Ekran yükleniyor…" />}>{children}</Suspense>;
+}
 
 const ALLOWED_ROLES: AdminRole[] = ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'];
 
@@ -47,10 +58,18 @@ function UnauthorizedScreen() {
   );
 }
 
-function Protected({ roles, children }: { roles?: AdminRole[]; children: React.ReactNode }) {
+function Protected({
+  roles,
+  deniedTo = '/',
+  children,
+}: {
+  roles?: AdminRole[];
+  deniedTo?: string;
+  children: React.ReactNode;
+}) {
   const { loading, rolesLoaded, primaryRole } = useAuth();
   if (loading || !rolesLoaded) return <Spinner label="Yükleniyor…" />;
-  if (roles && primaryRole && !roles.includes(primaryRole)) return <Navigate to="/" replace />;
+  if (roles && primaryRole && !roles.includes(primaryRole)) return <Navigate to={deniedTo} replace />;
   return <AdminLayout>{children}</AdminLayout>;
 }
 
@@ -74,7 +93,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><Dashboard /></Protected>} />
       <Route path="/orders" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager', 'staff']}><OrdersScreen /></Protected>} />
       <Route path="/products" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><ProductsScreen /></Protected>} />
       <Route path="/categories" element={<Protected roles={[...HQ_ROLES]}><CategoriesScreen /></Protected>} />
@@ -82,7 +101,9 @@ export default function App() {
       <Route path="/coupons" element={<Protected roles={[...HQ_ROLES]}><CouponsScreen /></Protected>} />
       <Route path="/rewards" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><RewardsScreen /></Protected>} />
       <Route path="/loyalty" element={<Protected roles={[...HQ_ROLES]}><LoyaltyScreen /></Protected>} />
-      <Route path="/customers" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><CustomersScreen /></Protected>} />
+      <Route path="/crm" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><CrmScreen /></Protected>} />
+      <Route path="/crm/:userId" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><CustomerDetailScreen /></Protected>} />
+      <Route path="/customers" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><Navigate to="/crm" replace /></Protected>} />
       <Route path="/notifications" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><NotificationsScreen /></Protected>} />
       <Route path="/stores" element={<Protected roles={['super_admin', 'admin', 'franchise', 'store_manager']}><StoresScreen /></Protected>} />
       <Route path="/franchises" element={<Protected roles={[...HQ_ROLES]}><FranchisesScreen /></Protected>} />
@@ -91,8 +112,12 @@ export default function App() {
       <Route path="/b2b-orders" element={<Protected roles={[...HQ_ROLES]}><B2BOrdersScreen onOpenOrder={(id) => window.location.href = `/b2b-orders/${id}`} /></Protected>} />
       <Route path="/b2b-orders/:orderId" element={<Protected roles={[...HQ_ROLES]}><B2BOrderDetailWrapper /></Protected>} />
       <Route path="/b2b-products" element={<Protected roles={[...HQ_ROLES]}><B2BProductsScreen /></Protected>} />
-      <Route path="/analytics" element={<Protected roles={['super_admin', 'admin', 'franchise']}><AnalyticsScreen /></Protected>} />
-      <Route path="/reports" element={<Protected roles={['super_admin', 'admin', 'franchise']}><ReportsScreen /></Protected>} />
+      <Route path="/hq/finance" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><FinanceScreen /></LazyScreen></Protected>} />
+      <Route path="/hq/finance/:franchiseId" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><FranchiseFinanceScreen /></LazyScreen></Protected>} />
+      <Route path="/hq/stores" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><StorePerformanceScreen /></LazyScreen></Protected>} />
+      <Route path="/hq/stores/:storeId" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><StoreDetailScreen /></LazyScreen></Protected>} />
+      <Route path="/analytics" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><AnalyticsScreen /></LazyScreen></Protected>} />
+      <Route path="/reports" element={<Protected roles={['super_admin', 'admin']} deniedTo="/orders"><LazyScreen><ReportsScreen /></LazyScreen></Protected>} />
       <Route path="/settings" element={<Protected roles={[...HQ_ROLES]}><SettingsScreen /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

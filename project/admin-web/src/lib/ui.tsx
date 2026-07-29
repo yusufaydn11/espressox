@@ -1,6 +1,7 @@
 import { type ReactNode, type ButtonHTMLAttributes, type ReactNode as TReactNode } from 'react';
 import { Search, ChevronLeft, ChevronRight, Inbox, X } from 'lucide-react';
 import { cn } from './utils';
+import { buttonClasses, type ButtonClassVariant } from '@shared/design/classNames';
 
 export function Card({ children, className, onClick }: { children: ReactNode; className?: string; onClick?: () => void }) {
   return (
@@ -10,7 +11,7 @@ export function Card({ children, className, onClick }: { children: ReactNode; cl
   );
 }
 
-type BtnVariant = 'primary' | 'dark' | 'outline' | 'ghost' | 'danger' | 'gold';
+type BtnVariant = ButtonClassVariant | 'dark';
 type BtnSize = 'sm' | 'md' | 'lg';
 
 interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -20,12 +21,15 @@ interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantCls: Record<BtnVariant, string> = {
+  ...buttonClasses,
   primary: 'bg-ex-red text-white hover:bg-ex-redDark shadow-red',
   dark: 'bg-ink-900 text-white hover:bg-ink-800 dark:bg-ink-100 dark:text-ink-900 dark:hover:bg-white',
   outline: 'border border-ink-200 text-ink-900 bg-white hover:bg-cream-50 dark:bg-ink-800 dark:border-ink-700 dark:text-ink-100 dark:hover:bg-ink-700',
   ghost: 'text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800',
   danger: 'bg-red-50 text-ex-red hover:bg-red-100 dark:bg-red-950 dark:text-red-400',
-  gold: 'bg-gold-gradient text-white shadow-soft',
+  gold: 'bg-gold-gradient text-ink-950 font-semibold shadow-gold hover:opacity-95',
+  secondary: 'bg-cream-100 text-ink-900 border border-ink-200 hover:bg-cream-200',
+  subtle: 'bg-ink-100 text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300',
 };
 const sizeCls: Record<BtnSize, string> = {
   sm: 'px-3 py-1.5 text-xs',

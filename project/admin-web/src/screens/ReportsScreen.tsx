@@ -1,140 +1,122 @@
-import { useEffect, useState, useCallback } from 'react';
-import { BarChart3, Download, TrendingUp, Store, Award, Repeat } from 'lucide-react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
-import { fetchSalesSeries, fetchStoreComparison, fetchTopProducts, fetchOrders } from '../lib/api';
-import { Card, Spinner, ErrorState, PageHeader, Button } from '../lib/ui';
-import { formatTRY, formatNum } from '../lib/utils';
+import { useState, useCallback } from 'react';
+import { Navigate } from 'react-router-dom';
+import { Download, RefreshCw } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useAuth } from '../lib/auth';
+import { PageHeader, Button, ErrorState, Spinner } from '../lib/ui';
+import { formatTRY } from '../lib/utils';
+import { useHqReports } from '../hooks/useHqReports';
+import {
+  HqSkeleton,
+  HqReportsKpiGrid,
+  TopProductsRankPanel,
+  RangeSelector,
+} from '../components/hq';
+import { SalesTrendChart, StorePerformanceGrid } from '../components/dashboard';
 
-const RANGES = [
-  { id: 7, label: '7 Gün' },
-  { id: 30, label: '30 Gün' },
-  { id: 90, label: '90 Gün' },
+const HQ_ROLES = new Set(['super_admin', 'admin']);
+const RANGE_OPTIONS = [
+  { value: 7, label: '7 Gün' },
+  { value: 30, label: '30 Gün' },
+  { value: 90, label: '90 Gün' },
 ];
-
 const PIE_COLORS = ['#C8102E', '#18181B', '#D4AF37', '#6E6E78', '#9494A0', '#C4C4CC'];
 
 export function ReportsScreen() {
+  const { primaryRole, rolesLoaded, loading: authLoading } = useAuth();
   const [range, setRange] = useState(30);
-  const [sales, setSales] = useState<{ label: string; value: number }[]>([]);
-  const [stores, setStores] = useState<{ label: string; value: number }[]>([]);
-  const [topProducts, setTopProducts] = useState<{ label: string; value: number }[]>([]);
-  const [orders, setOrders] = useState<Awaited<ReturnType<typeof fetchOrders>>>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, summary, loading, error, reload } = useHqReports(range);
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const [s, st, tp, o] = await Promise.all([fetchSalesSeries(range), fetchStoreComparison(), fetchTopProducts(6), fetchOrders('all')]);
-      setSales(s); setStores(st); setTopProducts(tp); setOrders(o);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Raporlar yüklenemedi'); }
-    finally { setLoading(false); }
-  }, [range]);
-  useEffect(() => { load(); }, [load]);
-
-  const totalRevenue = sales.reduce((s, r) => s + r.value, 0);
-  const avgBasket = orders.length > 0 ? orders.reduce((s, o) => s + Number(o.total), 0) / orders.length : 0;
-  const uniqueCustomers = new Set(orders.map(o => o.user_id)).size;
-  const repeatCustomers = Object.values(orders.reduce((acc, o) => { acc[o.user_id] = (acc[o.user_id] ?? 0) + 1; return acc; }, {} as Record<string, number>)).filter((c: number) => c > 1).length;
-  const repeatRate = uniqueCustomers > 0 ? (repeatCustomers / uniqueCustomers) * 100 : 0;
-
-  const exportCsv = () => {
-    const rows = [['Tarih', 'Ciro'], ...sales.map(s => [s.label, String(s.value)])];
-    const csv = rows.map(r => r.join(',')).join('\n');
+  const exportCsv = useCallback(() => {
+    if (!data) return;
+    const salesRows = [['Tarih', 'Ciro'], ...data.sales.map(s => [s.label, String(s.value)])];
+    const storeRows = [['Şube', 'Ciro'], ...data.stores.map(s => [s.label, String(s.value)])];
+    const productRows = [['Ürün', 'Adet'], ...data.topProducts.map(p => [p.label, String(p.value)])];
+    const csv = [
+      `# Espresso X Rapor — ${range} gün`,
+      '',
+      '--- Satış Trendi ---',
+      ...salesRows.map(r => r.join(',')),
+      '',
+      '--- Şube Performansı ---',
+      ...storeRows.map(r => r.join(',')),
+      '',
+      '--- En Çok Satan ---',
+      ...productRows.map(r => r.join(',')),
+    ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `espresso-x-satis-${range}gun.csv`; a.click();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `espresso-x-hq-rapor-${range}gun.csv`;
+    a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [data, range]);
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (authLoading || !rolesLoaded) return <Spinner label="Yetkiler doğrulanıyor…" />;
+  if (!primaryRole || !HQ_ROLES.has(primaryRole)) return <Navigate to="/orders" replace />;
+
+  if (loading) return <HqSkeleton />;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (!data || !summary) return null;
+
+  const hasProducts = data.topProducts.some(p => p.value > 0);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Raporlar" subtitle="Satış analizi ve performans metrikleri"
-        action={<div className="flex items-center gap-2">
-          <div className="flex bg-cream-100 dark:bg-ink-800 rounded-xl p-1">
-            {RANGES.map(r => <button key={r.id} onClick={() => setRange(r.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${range === r.id ? 'bg-white dark:bg-ink-900 shadow-card text-ink-900 dark:text-ink-100' : 'text-ink-400 dark:text-ink-400'}`}>{r.label}</button>)}
+    <div className="space-y-6 min-w-0 overflow-x-hidden">
+      <PageHeader
+        title="HQ Yönetim Raporları"
+        subtitle="Satış analizi, şube karşılaştırması ve ürün performansı"
+        action={
+          <div className="flex items-center gap-2">
+            <RangeSelector value={range} options={RANGE_OPTIONS} onChange={setRange} />
+            <Button variant="outline" size="sm" onClick={exportCsv}>
+              <Download size={14} className="mr-1.5 inline" />
+              CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={reload}>
+              <RefreshCw size={14} className="mr-1.5 inline" />
+              Yenile
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={exportCsv}><Download size={14} /> CSV</Button>
-        </div>} />
+        }
+      />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard label="Toplam Ciro" value={formatTRY(totalRevenue)} icon={<TrendingUp size={16} className="text-ex-red" />} />
-        <SummaryCard label="Ort. Sepet" value={formatTRY(avgBasket)} icon={<BarChart3 size={16} className="text-ink-600 dark:text-ink-300" />} />
-        <SummaryCard label="Tekrar Oranı" value={`%${repeatRate.toFixed(0)}`} icon={<Repeat size={16} className="text-ink-600 dark:text-ink-300" />} />
-        <SummaryCard label="En İyi Şube" value={stores[0]?.label ?? '—'} icon={<Store size={16} className="text-ink-600 dark:text-ink-300" />} />
+      <HqReportsKpiGrid
+        totalRevenue={summary.totalRevenue}
+        avgBasket={summary.avgBasket}
+        newMembers={summary.newMembers}
+        topStore={summary.topStore}
+        range={range}
+      />
+
+      <SalesTrendChart data={data.sales} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <StorePerformanceGrid stores={data.stores} />
+        {hasProducts ? (
+          <div className="admin-card p-5 min-w-0">
+            <h3 className="text-sm font-bold text-ink-900 dark:text-ink-100 mb-4">Ürün Satış Dağılımı</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie data={data.topProducts} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={90} innerRadius={50}>
+                  {data.topProducts.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => `${v} adet`} contentStyle={{ borderRadius: 12, border: '1px solid #EFEFF1', fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <TopProductsRankPanel data={[]} />
+        )}
       </div>
 
-      <Card className="p-5">
-        <h3 className="text-sm font-bold text-ink-900 dark:text-ink-100 mb-4">Satış Trendi</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={sales}>
-            <defs><linearGradient id="repGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#C8102E" stopOpacity={0.25} /><stop offset="100%" stopColor="#C8102E" stopOpacity={0} /></linearGradient></defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#EFEFF1" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9494A0' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#9494A0' }} axisLine={false} tickLine={false} tickFormatter={v => `${v / 1000}k`} />
-            <Tooltip formatter={(v: number) => formatTRY(v)} contentStyle={{ borderRadius: 12, border: '1px solid #EFEFF1', fontSize: 12 }} />
-            <Area type="monotone" dataKey="value" stroke="#C8102E" strokeWidth={2.5} fill="url(#repGrad)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </Card>
+      <TopProductsRankPanel data={data.topProducts} />
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="p-5">
-          <h3 className="text-sm font-bold text-ink-900 dark:text-ink-100 mb-4">Şube Performansı</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={stores}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EFEFF1" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9494A0' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9494A0' }} axisLine={false} tickLine={false} tickFormatter={v => `${v / 1000}k`} />
-              <Tooltip formatter={(v: number) => formatTRY(v)} contentStyle={{ borderRadius: 12, border: '1px solid #EFEFF1', fontSize: 12 }} />
-              <Bar dataKey="value" fill="#18181B" radius={[6, 6, 0, 0]} barSize={28} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card className="p-5">
-          <h3 className="text-sm font-bold text-ink-900 dark:text-ink-100 mb-4">Ürün Satış Dağılımı</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie data={topProducts} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={90} innerRadius={50}>
-                {topProducts.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v: number) => `${v} adet`} contentStyle={{ borderRadius: 12, border: '1px solid #EFEFF1', fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
+      <div className="admin-card p-5 text-xs text-ink-400">
+        <p>Finans özeti: Aylık ciro {formatTRY(data.kpis.monthRevenue)} · Bugünkü satış {formatTRY(data.kpis.todaySales)} · Toplam sipariş {summary.totalOrders}</p>
       </div>
-
-      <Card className="p-5">
-        <h3 className="text-sm font-bold text-ink-900 dark:text-ink-100 mb-4 flex items-center gap-2"><Award size={16} className="text-ex-red" /> En Çok Satan Ürünler</h3>
-        <div className="space-y-3">
-          {topProducts.map((p, i) => {
-            const max = topProducts[0]?.value || 1;
-            return (
-              <div key={p.label}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-ink-700 dark:text-ink-300 flex items-center gap-2"><span className="text-xs font-bold text-ink-400 dark:text-ink-400 w-4">{i + 1}</span>{p.label}</span>
-                  <span className="text-xs font-bold text-ink-900 dark:text-ink-100">{formatNum(p.value)} adet</span>
-                </div>
-                <div className="h-2 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden"><div className="h-full rounded-full bg-red-gradient" style={{ width: `${(p.value / max) * 100}%` }} /></div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
     </div>
-  );
-}
-
-function SummaryCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return (
-    <Card className="p-5">
-      <div className="h-10 w-10 rounded-xl bg-cream-100 dark:bg-ink-800 flex items-center justify-center">{icon}</div>
-      <p className="text-xl font-bold text-ink-900 dark:text-ink-100 mt-3 font-display">{value}</p>
-      <p className="text-xs text-ink-400 dark:text-ink-400 mt-1">{label}</p>
-    </Card>
   );
 }

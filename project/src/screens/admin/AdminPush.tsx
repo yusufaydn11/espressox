@@ -8,7 +8,7 @@ import { useAdmin } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
 
 export function AdminPush() {
-  const { sendPushNotification } = useAdmin();
+  const { sendPushNotification, customers, totalCustomers } = useAdmin();
   const [channel, setChannel] = useState<'push' | 'email' | 'sms'>('push');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -23,11 +23,11 @@ export function AdminPush() {
   ];
 
   const segments = [
-    { id: 'all', label: 'Tüm müşteriler', count: '12.408' },
-    { id: 'vip', label: 'VIP üyeler', count: '184' },
-    { id: 'gold', label: 'Altın seviye', count: '1.640' },
-    { id: 'inactive', label: '30g pasif', count: '1.420' },
-    { id: 'birthday', label: 'Doğum günü ayı', count: '1.820' },
+    { id: 'all', label: 'Tüm müşteriler', count: totalCustomers.toLocaleString('tr-TR') },
+    { id: 'vip', label: 'VIP üyeler', count: customers.filter(c => c.status === 'vip').length.toLocaleString('tr-TR') },
+    { id: 'gold', label: 'Altın seviye', count: customers.filter(c => c.tier === 'Altın').length.toLocaleString('tr-TR') },
+    { id: 'inactive', label: 'Pasif olmayan', count: customers.filter(c => !c.is_blocked).length.toLocaleString('tr-TR') },
+    { id: 'birthday', label: 'Doğum günü ayı', count: '—' },
   ];
 
   const handleSend = async () => {

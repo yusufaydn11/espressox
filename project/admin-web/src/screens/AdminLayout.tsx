@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, PackageOpen, FolderTree, Megaphone, Ticket,
   Crown, Users, Bell, Store, Building2, UserCog, Boxes, BarChart3, Settings,
-  LogOut, Menu, X, ChevronDown, Coffee, Sun, Moon, PackageCheck, PackageSearch, type LucideIcon,
+  LogOut, Menu, X, ChevronDown, Coffee, Sun, Moon, PackageCheck, PackageSearch,
+  TrendingUp, FileBarChart, Wallet, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -22,7 +23,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Genel',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'] },
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin'] },
       { to: '/orders', label: 'Sipariş Yönetimi', icon: ShoppingBag, roles: ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'] },
       { to: '/products', label: 'Ürün Yönetimi', icon: PackageOpen, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
       { to: '/categories', label: 'Kategori Yönetimi', icon: FolderTree, roles: [...HQ_ROLES] },
@@ -35,8 +36,17 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/coupons', label: 'Kupon Yönetimi', icon: Ticket, roles: [...HQ_ROLES] },
       { to: '/rewards', label: 'Ödüller', icon: Crown, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
       { to: '/loyalty', label: 'Sadakat Sistemi', icon: Crown, roles: [...HQ_ROLES] },
-      { to: '/customers', label: 'Müşteri Yönetimi', icon: Users, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/crm', label: 'CRM', icon: Users, roles: ['super_admin', 'admin'] },
       { to: '/notifications', label: 'Bildirim Yönetimi', icon: Bell, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+    ],
+  },
+  {
+    section: 'HQ Yönetim',
+    items: [
+      { to: '/hq/stores', label: 'Şube Performansı', icon: TrendingUp, roles: ['super_admin', 'admin'] },
+      { to: '/hq/finance', label: 'Finans', icon: Wallet, roles: ['super_admin', 'admin'] },
+      { to: '/analytics', label: 'Analitik', icon: BarChart3, roles: ['super_admin', 'admin'] },
+      { to: '/reports', label: 'Yönetim Raporları', icon: FileBarChart, roles: ['super_admin', 'admin'] },
     ],
   },
   {
@@ -53,8 +63,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Sistem',
     items: [
-      { to: '/analytics', label: 'Analitik', icon: BarChart3, roles: ['super_admin', 'admin', 'franchise'] },
-      { to: '/reports', label: 'Raporlar', icon: BarChart3, roles: ['super_admin', 'admin', 'franchise'] },
       { to: '/settings', label: 'Ayarlar', icon: Settings, roles: [...HQ_ROLES] },
     ],
   },
@@ -138,7 +146,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     </div>
   );
 
-  const pageTitle = NAV.flatMap(g => g.items).find(i => i.to === location.pathname)?.label ?? 'Dashboard';
+  const pageTitle = (() => {
+    if (location.pathname.startsWith('/hq/finance/')) return 'Franchise Finans';
+    if (location.pathname.startsWith('/hq/stores/')) return 'Şube Detayı';
+    if (location.pathname.startsWith('/crm/')) return 'Müşteri Detayı';
+    return NAV.flatMap(g => g.items).find(i => i.to === location.pathname)?.label ?? 'Dashboard';
+  })();
 
   return (
     <div className="min-h-screen bg-cream-50 dark:bg-ink-950 flex">
