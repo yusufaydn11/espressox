@@ -13,6 +13,8 @@ import {
   B2BLoadingSpinner, B2BErrorState, B2BEmptyState,
 } from '@/components/b2b';
 
+import { getBalanceLabel } from '@shared/utils/payments';
+
 const invStatusTone = (s: string) => B2B_INVOICE_STATUS_TONES[s] ?? 'neutral';
 
 export function B2BAccount({ franchiseId }: { franchiseId: string }) {
@@ -55,7 +57,7 @@ export function B2BAccount({ franchiseId }: { franchiseId: string }) {
             <View className="h-8 w-8 rounded-lg bg-ink-50 items-center justify-center"><Wallet size={16} color="#3D3D42" /></View>
           </View>
           <Text className={cn('text-xl font-bold mt-2', balanceTone)}>{b2bFormatTRY(Math.abs(summary.balance))}</Text>
-          <Text className={cn('text-[11px] mt-0.5', balanceTone)}>{summary.balance > 0 ? 'Borçlu' : summary.balance < 0 ? 'Alacaklı' : 'Kapalı'}</Text>
+          <Text className={cn('text-[11px] mt-0.5', balanceTone)}>{getBalanceLabel(summary.balance)}</Text>
         </View>
       </View>
 
@@ -119,7 +121,7 @@ export function B2BAccount({ franchiseId }: { franchiseId: string }) {
   );
 }
 
-export function B2BInvoices({ franchiseId }: { franchiseId: string }) {
+export function B2BInvoices({ franchiseId: _franchiseId }: { franchiseId: string }) {
   const [invoices, setInvoices] = useState<B2BInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

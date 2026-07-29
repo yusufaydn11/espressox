@@ -16,7 +16,23 @@ class OrderService extends B2BService<B2BOrder> {
       .eq('id', id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return data as (B2BOrder & { b2b_order_items: B2BOrderItem[] }) | null;
+    if (!data) return null;
+
+    const order = data as B2BOrder & { b2b_order_items: B2BOrderItem[] };
+    const productIds = order.b2b_order_items.map(i => i.product_id).filter(Boolean) as string[];
+    if (productIds.length === 0) return order;
+
+    const { data: products } = await supabase.from('b2b_products').select('id, image_url').in('id', productIds);
+    const imageMap: Record<string, string> = {};
+    (products as { id: string; image_url: string }[] | null)?.forEach(p => { imageMap[p.id] = p.image_url; });
+
+    return {
+      ...order,
+      b2b_order_items: order.b2b_order_items.map(it => ({
+        ...it,
+        image_url: it.product_id ? imageMap[it.product_id] ?? '' : '',
+      })),
+    };
   }
 
   async listWithItems(status?: string, limit = 100): Promise<(B2BOrder & { b2b_order_items: B2BOrderItem[] })[]> {
@@ -72,7 +88,6 @@ class OrderService extends B2BService<B2BOrder> {
     });
   }
 
-  // ── HQ only: list orders for management (only paid and beyond) ──
   async listForManagement(limit = 200): Promise<(B2BOrder & { b2b_order_items: B2BOrderItem[] })[]> {
     const { data, error } = await supabase
       .from(this.tableName)
@@ -82,6 +97,37 @@ class OrderService extends B2BService<B2BOrder> {
       .limit(limit);
     if (error) throw new Error(error.message);
     return (data ?? []) as (B2BOrder & { b2b_order_items: B2BOrderItem[] })[];
+  }
+
+  async getTimeline(orderId: string): Promise<Array<{
+    action: string;
+    created_at: string;
+    actor_name: string;
+    details: Record<string, unknown>;
+  }>> {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('action, created_at, actor_id, details')
+      .eq('entity_type', 'b2b_order')
+      .eq('entity_id', orderId)
+      .order('created_at', { ascending: true });
+    if (error) return [];
+
+    const rows = data as { action: string; created_at: string; actor_id: string | null; details: Record<string, unknown> }[];
+    const actorIds = [...new Set(rows.map(r => r.actor_id).filter(Boolean))] as string[];
+    const nameMap: Record<string, string> = {};
+    if (actorIds.length) {
+      const { data: profiles } = await supabase.from('profiles').select('user_id, full_name').in('user_id', actorIds);
+      (profiles as { user_id: string; full_name: string }[] | null)?.forEach(p => {
+        nameMap[p.user_id] = p.full_name || 'Merkez';
+      });
+    }
+    return rows.map(r => ({
+      action: r.action,
+      created_at: r.created_at,
+      actor_name: r.actor_id ? nameMap[r.actor_id] ?? 'Merkez' : 'Sistem',
+      details: r.details,
+    }));
   }
 }
 

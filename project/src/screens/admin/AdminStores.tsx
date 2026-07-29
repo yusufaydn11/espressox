@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2, Phone, MessageCircle } from 'lucide-react';
+import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, Select, Toggle } from '@/components/ui/Modal';
@@ -10,12 +10,10 @@ import type { Store } from '@/lib/supabase';
 
 type StoreForm = Store & { distance?: number };
 
-const busyLabels: Record<string, string> = { quiet: 'Sakin', moderate: 'Orta', busy: 'Yoğun' };
-
 const blankStore = (): StoreForm => ({
   id: genId('s'), name: '', address: '', lat: 41.05, lng: 29.0, open: true, hours: '07:00 – 22:00',
   busy: 'moderate', amenities: ['WiFi'], drive_thru: false, wifi: true, parking: false, image_url: '',
-  phone: '', whatsapp: '',
+  phone: '', whatsapp: '', franchise_id: null,
 });
 
 export function AdminStores() {

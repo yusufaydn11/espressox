@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, DollarSign, ShoppingBag, Users, Crown, Zap, UserPlus, Award } from 'lucide-react';import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { fetchDashboardKpis, fetchSalesSeries, fetchStoreComparison, fetchTopProducts, fetchOrders } from '../lib/api';
+import { TrendingUp, DollarSign, ShoppingBag, Users, Crown, UserPlus, Award } from 'lucide-react';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { fetchDashboardKpis, fetchSalesSeries, fetchStoreComparison, fetchTopProducts, fetchRecentDashboardOrders } from '../lib/api';
 import { Card, StatCard, Spinner, ErrorState, Badge } from '../lib/ui';
 import { formatTRY, formatNum, timeAgo } from '../lib/utils';
 import { useAuth } from '../lib/auth';
@@ -12,7 +13,7 @@ export function Dashboard() {
   const [sales, setSales] = useState<{ label: string; value: number }[]>([]);
   const [stores, setStores] = useState<{ label: string; value: number }[]>([]);
   const [topProducts, setTopProducts] = useState<{ label: string; value: number }[]>([]);
-  const [recentOrders, setRecentOrders] = useState<Awaited<ReturnType<typeof fetchOrders>> | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Awaited<ReturnType<typeof fetchRecentDashboardOrders>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,10 +22,10 @@ export function Dashboard() {
     try {
       const [k, s, st, tp, ro] = await Promise.all([
         fetchDashboardKpis(), fetchSalesSeries(14), fetchStoreComparison(),
-        fetchTopProducts(6), fetchOrders('all'),
+        fetchTopProducts(6), fetchRecentDashboardOrders(6),
       ]);
       setKpis(k); setSales(s); setStores(st); setTopProducts(tp);
-      setRecentOrders(ro.slice(0, 6));
+      setRecentOrders(ro);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Veriler yüklenemedi');
     } finally {

@@ -5,8 +5,9 @@ import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { AI_CHAT, AI_SUGGESTIONS } from '@/data';
 import { useProducts } from '@/lib/hooks';
+import { mapRetailDbProductsToUi } from '@shared/utils/products';
+import type { RetailProductDbRow } from '@shared/types/products';
 import { cn } from '@/lib/utils';
-import type { Product as ProductType } from '@/types';
 
 interface Msg { role: 'ai' | 'user'; text: string; }
 
@@ -25,14 +26,7 @@ export function AiAssistantSheet() {
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
-  const products: ProductType[] = (dbProducts ?? []).map(p => ({
-    id: p.id, name: p.name, category: p.category, description: p.description,
-    price: Number(p.price), image: p.image, rating: Number(p.rating),
-    popular: p.popular, seasonal: p.seasonal, aiRecommended: p.ai_recommended,
-    calories: p.calories, allergens: p.allergens, sizes: p.sizes, milks: p.milks,
-    syrups: p.syrups, toppings: p.toppings, temperature: p.temperature,
-    iceLevels: p.ice_levels, nutrition: p.nutrition,
-  }));
+  const products = mapRetailDbProductsToUi((dbProducts ?? []) as RetailProductDbRow[]);
 
   useEffect(() => {
     if (open) {

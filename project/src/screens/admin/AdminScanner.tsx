@@ -5,16 +5,23 @@ import {
   ScanLine, Camera, CameraOff, Keyboard, CheckCircle2, XCircle,
   User, Gift, Award, RotateCcw, Sparkles, Loader2,
 } from 'lucide-react';
-import { supabase, type Profile, type QrCodeRow } from '@/lib/supabase';
+import {
+  lookupQrByCode,
+  scanQrStamp,
+  fetchProfileByUserId,
+  countActiveStamps,
+} from '@/services/loyalty';
+import {
+  POINTS_PER_STAMP,
+  STAMPS_TO_REWARD,
+  SCAN_ERROR_LABELS,
+} from '@shared/constants/loyalty';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, TextInput } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
-
-const POINTS_PER_STAMP = 10;
-const STAMPS_TO_REWARD = 5;
 
 type ScanStatus = 'idle' | 'processing' | 'success' | 'error';
 
@@ -28,7 +35,7 @@ type ScanResult = {
 };
 
 export function AdminScanner() {
-  const { user } = useAuth();
+  const { storeId: authStoreId } = useAuth();
   const { showToast, stores } = useAdmin();
 
   const [mode, setMode] = useState<'camera' | 'manual'>('camera');
@@ -41,9 +48,15 @@ export function AdminScanner() {
   const lastScanRef = useRef<string>('');
   const lastScanTimeRef = useRef<number>(0);
 
+  const effectiveStoreId = authStoreId ?? storeId;
+
   useEffect(() => {
+    if (authStoreId) {
+      setStoreId(authStoreId);
+      return;
+    }
     if (stores.length > 0 && !storeId) setStoreId(stores[0].id);
-  }, [stores, storeId]);
+  }, [stores, storeId, authStoreId]);
 
   const processCode = useCallback(async (rawCode: string) => {
     const code = rawCode.trim().toUpperCase();
@@ -58,14 +71,9 @@ export function AdminScanner() {
     setResult(null);
 
     try {
-      const { data: qrRow, error: qrErr } = await supabase
-        .from('qr_codes')
-        .select('*')
-        .eq('code', code)
-        .eq('is_active', true)
-        .maybeSingle();
+      const { data: qrRow, error: qrErr } = await lookupQrByCode(code);
 
-      if (qrErr) throw qrErr;
+      if (qrErr) throw new Error(qrErr);
       if (!qrRow) {
         const r: ScanResult = { ok: false, title: 'Kod bulunamadı', message: 'Bu QR kodu kayıtlı değil veya pasif.' };
         setResult(r);
@@ -74,73 +82,27 @@ export function AdminScanner() {
         return;
       }
 
-      const qr = qrRow as QrCodeRow;
+      const qr = qrRow;
 
-      const { data: profileRow, error: profErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', qr.user_id)
-        .maybeSingle();
+      const { data: rpc, error: rpcErr } = await scanQrStamp(qr.id, effectiveStoreId || null);
+      if (rpcErr) throw new Error(rpcErr);
+      if (!rpc) throw new Error('Tarama yanıtı alınamadı');
 
-      if (profErr) throw profErr;
-      if (!profileRow) {
-        setResult({ ok: false, title: 'Müşteri bulunamadı', message: 'Bu koda ait müşteri kaydı yok.' });
+      if (rpc.error) {
+        const msg = SCAN_ERROR_LABELS[rpc.error] ?? rpc.error;
+        setResult({ ok: false, title: 'Tarama başarısız', message: msg });
         setStatus('error');
-        return;
-      }
-      const profile = profileRow as Profile;
-
-      if (profile.is_blocked) {
-        setResult({ ok: false, title: 'Hesap engelli', message: `${profile.full_name || 'Müşteri'} engellenmiş durumda.` });
-        setStatus('error');
-        setRecent(prev => [{ name: profile.full_name || 'Müşteri', points: 0, time: now(), ok: false }, ...prev].slice(0, 6));
+        setRecent(prev => [{ name: 'Hata', points: 0, time: now(), ok: false }, ...prev].slice(0, 6));
         return;
       }
 
-      const dedupToken = `${qr.user_id}:${code}:${Date.now()}`;
+      const customerId = rpc.customer_id ?? qr.user_id;
+      const { data: profile } = await fetchProfileByUserId(customerId);
 
-      const { error: stampErr } = await supabase
-        .from('loyalty_stamps')
-        .insert({ user_id: qr.user_id, store_id: storeId || null });
-
-      if (stampErr) throw stampErr;
-
-      const { error: scanErr } = await supabase.from('qr_scans').insert({
-        user_id: qr.user_id,
-        qr_code_id: qr.id,
-        store_id: storeId || null,
-        action: 'stamp',
-        points_awarded: POINTS_PER_STAMP,
-        dedup_token: dedupToken,
-        scanned_by: user?.id ?? null,
-      });
-      if (scanErr) throw scanErr;
-
-      const { error: histErr } = await supabase.from('points_history').insert({
-        user_id: qr.user_id,
-        title: 'QR Damga Puanı',
-        points: POINTS_PER_STAMP,
-        type: 'earn',
-        store_id: storeId || null,
-      });
-      if (histErr) throw histErr;
-
-      const newPoints = (profile.points ?? 0) + POINTS_PER_STAMP;
-      const newLifetime = (profile.lifetime_points ?? 0) + POINTS_PER_STAMP;
-      const { error: updErr } = await supabase
-        .from('profiles')
-        .update({ points: newPoints, lifetime_points: newLifetime })
-        .eq('user_id', qr.user_id);
-      if (updErr) throw updErr;
-
-      const { count: stampCount, error: cntErr } = await supabase
-        .from('loyalty_stamps')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', qr.user_id)
-        .eq('redeemed', false);
-      if (cntErr) throw cntErr;
+      const { count: stampCount } = await countActiveStamps(customerId);
 
       const earnedReward = stampCount !== null && stampCount >= STAMPS_TO_REWARD;
+      const pointsAwarded = rpc.points_awarded ?? POINTS_PER_STAMP;
 
       const r: ScanResult = {
         ok: true,
@@ -148,13 +110,13 @@ export function AdminScanner() {
         message: earnedReward
           ? `${STAMPS_TO_REWARD} damga tamamlandı! Ödül talep edebilir.`
           : `${stampCount ?? 0} / ${STAMPS_TO_REWARD} damga`,
-        customerName: profile.full_name || 'Müşteri',
-        newPoints,
+        customerName: profile?.full_name || 'Müşteri',
+        newPoints: profile?.points,
         newStampCount: stampCount ?? 0,
       };
       setResult(r);
       setStatus('success');
-      setRecent(prev => [{ name: profile.full_name || 'Müşteri', points: POINTS_PER_STAMP, time: now(), ok: true }, ...prev].slice(0, 6));
+      setRecent(prev => [{ name: profile?.full_name || 'Müşteri', points: pointsAwarded, time: now(), ok: true }, ...prev].slice(0, 6));
       showToast('Damga ve puan eklendi');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Bilinmeyen hata';
@@ -162,7 +124,7 @@ export function AdminScanner() {
       setStatus('error');
       showToast('Hata: ' + msg);
     }
-  }, [storeId, user?.id, showToast]);
+  }, [effectiveStoreId, showToast]);
 
   const handleManualSubmit = useCallback(() => {
     if (!manualCode.trim()) return;
@@ -175,22 +137,26 @@ export function AdminScanner() {
     setStatus('idle');
   }, []);
 
-  const storeOptions = [
-    ...(stores.length === 0 ? [{ label: 'Genel', value: '' }] : []),
-    ...stores.map(s => ({ label: s.name, value: s.id })),
-  ];
+  const storeOptions = authStoreId
+    ? stores.filter(s => s.id === authStoreId).map(s => ({ label: s.name, value: s.id }))
+    : [
+        ...(stores.length === 0 ? [{ label: 'Genel', value: '' }] : []),
+        ...stores.map(s => ({ label: s.name, value: s.id })),
+      ];
 
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="px-4 pb-8 gap-5 max-w-2xl w-full mx-auto">
-      {/* Store selector */}
       <Card className="p-4">
         <Text className="text-xs font-semibold text-ink-500 uppercase tracking-wide">Mağaza</Text>
         <View className="mt-1.5">
-          <Select value={storeId} onValueChange={setStoreId} options={storeOptions} />
+          <Select
+            value={effectiveStoreId}
+            onValueChange={authStoreId ? () => {} : setStoreId}
+            options={storeOptions}
+          />
         </View>
       </Card>
 
-      {/* Mode toggle */}
       <View className="flex-row gap-2 p-1 bg-ink-100 rounded-2xl">
         <Pressable
           onPress={() => { setMode('camera'); }}
@@ -208,7 +174,6 @@ export function AdminScanner() {
         </Pressable>
       </View>
 
-      {/* Camera view with live barcode scanning */}
       {mode === 'camera' && (
         <Card className="p-0 overflow-hidden">
           <View className="relative aspect-square bg-ink-950 items-center justify-center">
@@ -252,10 +217,10 @@ export function AdminScanner() {
                 facing="back"
                 barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
                 onBarcodeScanned={({ data }) => {
-                  const now = Date.now();
-                  if (data === lastScanRef.current && now - lastScanTimeRef.current < 3000) return;
+                  const ts = Date.now();
+                  if (data === lastScanRef.current && ts - lastScanTimeRef.current < 3000) return;
                   lastScanRef.current = data;
-                  lastScanTimeRef.current = now;
+                  lastScanTimeRef.current = ts;
                   void processCode(data);
                 }}
               >
@@ -307,7 +272,6 @@ export function AdminScanner() {
         </Card>
       )}
 
-      {/* Manual entry */}
       {mode === 'manual' && (
         <Card className="p-5">
           <View className="gap-4">
@@ -329,7 +293,6 @@ export function AdminScanner() {
         </Card>
       )}
 
-      {/* Result detail */}
       {result && (status === 'success' || status === 'error') && (
         <Card className={cn('p-5', result.ok ? 'border-green-200' : 'border-ex-red/30')}>
           <View className="flex-row items-start gap-3">
@@ -364,7 +327,6 @@ export function AdminScanner() {
         </Card>
       )}
 
-      {/* Recent scans */}
       {recent.length > 0 && (
         <View>
           <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2">Son Taramalar</Text>

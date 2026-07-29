@@ -8,6 +8,7 @@ import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNotificationPrefs, updateNotificationPrefs } from '@/lib/hooks';
 import type { NotificationPrefsRow } from '@/lib/supabase';
+import { NOTIFICATION_PREF_LABELS } from '@shared/constants/notifications';
 import { cn } from '@/lib/utils';
 
 export function NotificationSettingsSheet() {
@@ -31,12 +32,17 @@ export function NotificationSettingsSheet() {
     else { showToast('Bildirim tercihi güncellendi'); reload(); }
   };
 
-  const categories = [
-    { id: 'order_updates' as const, label: 'Sipariş güncellemeleri', desc: 'Sipariş durumu, hazırlık ve teslimat bildirimleri', icon: ShoppingBag },
-    { id: 'promotions' as const, label: 'Kampanya ve indirimler', desc: 'Mutlu saat, mevsimsel kampanya ve özel fırsatlar', icon: Megaphone },
-    { id: 'rewards' as const, label: 'Ödül ve puan', desc: 'Puan kazançları, ödül açılışı ve seviye yükselmeleri', icon: Gift },
-    { id: 'challenges' as const, label: 'Görev hatırlatmaları', desc: 'Haftalık görevler ve seri uyarıları', icon: Star },
-  ];
+  const categories = ([
+    { id: 'order_updates' as const, icon: ShoppingBag },
+    { id: 'promotions' as const, icon: Megaphone },
+    { id: 'rewards' as const, icon: Gift },
+    { id: 'challenges' as const, icon: Star },
+  ] as const).map(({ id, icon }) => ({
+    id,
+    icon,
+    label: NOTIFICATION_PREF_LABELS[id].label,
+    desc: NOTIFICATION_PREF_LABELS[id].desc,
+  }));
 
   return (
     <Sheet open={open} onClose={closeSheet} title="Bildirim Ayarları">

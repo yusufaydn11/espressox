@@ -1,7 +1,7 @@
 // ─── Product Service ───────────────────────────────────────
 
 import { supabase } from '@/lib/supabase';
-import { B2BService, getEffectivePrice, hasActiveCampaign } from './base';
+import { B2BService } from './base';
 import type { B2BProduct, B2BProductStock } from './types';
 
 class ProductService extends B2BService<B2BProduct> {
@@ -23,14 +23,6 @@ class ProductService extends B2BService<B2BProduct> {
     const { data, error } = await supabase.from('b2b_product_stock').select('*');
     if (error) throw new Error(error.message);
     return (data ?? []) as B2BProductStock[];
-  }
-
-  effectivePrice(p: B2BProduct): number {
-    return getEffectivePrice(p);
-  }
-
-  isOnCampaign(p: B2BProduct): boolean {
-    return hasActiveCampaign(p);
   }
 }
 

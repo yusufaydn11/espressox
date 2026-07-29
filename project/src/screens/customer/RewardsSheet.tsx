@@ -3,7 +3,15 @@ import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { Crown, Zap, Gift, ChevronRight, Star, Lock, Check } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
-import { TIERS } from '@/data';
+import { TIERS } from '@shared/constants/loyalty';
+import {
+  formatPoints,
+  formatRewardCost,
+  getNextTier,
+  getTierProgress,
+  getRewardButtonLabel,
+} from '@shared/utils/loyalty';
+import { redeemReward } from '@/services/loyalty';
 import { useRewards, usePointsHistory, useLoyaltyStamps, useRewardRedemptions } from '@/lib/hooks';
 import { Sheet } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
@@ -13,7 +21,7 @@ import { cn } from '@/lib/utils';
 
 export function RewardsSheet() {
   const { sheet, closeSheet, showToast } = useApp();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { data: rewards, error: rewErr, loading: rewLoading, reload: rewReload } = useRewards();
   const { data: history, error: histErr, loading: histLoading, reload: histReload } = usePointsHistory();
   const { data: stamps } = useLoyaltyStamps();
@@ -27,22 +35,17 @@ export function RewardsSheet() {
   const redeemedIds = new Set(redemptions?.map(r => r.reward_id) ?? []);
   const stampCount = stamps?.length ?? 0;
 
-  const currentTierIdx = TIERS.findIndex(t => t.name === tier);
-  const nextTier = TIERS[currentTierIdx + 1];
-  const tierProgress = nextTier
-    ? Math.min(100, Math.round(((points - TIERS[currentTierIdx].minPoints) / (nextTier.minPoints - TIERS[currentTierIdx].minPoints)) * 100))
-    : 100;
+  const nextTier = getNextTier(tier);
+  const tierProgress = getTierProgress(points, tier);
 
   const redeem = async (rewardId: string, title: string, cost: number) => {
     if (points < cost) { showToast(`${cost - points} puana daha ihtiyacın var`); return; }
     if (redeemedIds.has(rewardId) && cost === 0) { showToast('Bu ödül zaten kullanıldı'); return; }
-    const { supabase } = await import('@/lib/supabase');
-    const { data, error } = await supabase.rpc('redeem_reward', { p_reward_id: rewardId });
-    if (error) { showToast('Bir hata oluştu: ' + error.message); return; }
-    const result = data as { error: string | null; needed?: number };
+    const result = await redeemReward(rewardId);
     if (result.error === 'insufficient_points') { showToast(`${result.needed ?? 0} puana daha ihtiyacın var`); return; }
     if (result.error) { showToast('Bir hata oluştu: ' + result.error); return; }
     showToast(`${title} kullanıldı`);
+    await refreshProfile();
     redReload();
     histReload();
   };
@@ -68,7 +71,7 @@ export function RewardsSheet() {
                 </View>
                 <Text className="text-[10px] text-ink-300 mt-3 uppercase tracking-wide">Puan bakiyen</Text>
                 <Text className="text-[40px] font-bold text-white leading-none mt-1 font-display">
-                  {points.toLocaleString('tr-TR')}
+                  {formatPoints(points)}
                 </Text>
               </View>
               <View className="items-end">
@@ -100,7 +103,7 @@ export function RewardsSheet() {
         {/* Stats */}
         <View className="flex-row gap-3">
           {[
-            { label: 'Yaşam boyu', value: (profile?.lifetime_points ?? 0).toLocaleString('tr-TR'), icon: Zap },
+            { label: 'Yaşam boyu', value: formatPoints(profile?.lifetime_points ?? 0), icon: Zap },
             { label: 'Seri', value: `${profile?.streak ?? 0} gün`, icon: Gift },
             { label: 'Damga', value: `${stampCount}/10`, icon: Crown },
           ].map(({ label, value, icon: Icon }) => (
@@ -135,7 +138,7 @@ export function RewardsSheet() {
                     </View>
                     <View className="flex-1">
                       <Text className="text-sm font-bold text-ink-900 leading-none">{t.name}</Text>
-                      <Text className="text-[10px] text-ink-400 mt-0.5">{t.minPoints.toLocaleString('tr-TR')}+ puan</Text>
+                      <Text className="text-[10px] text-ink-400 mt-0.5">{formatPoints(t.minPoints)}+ puan</Text>
                     </View>
                     {isCurrent && (
                       <View className="px-2 py-0.5 rounded-full bg-ex-red">
@@ -197,7 +200,7 @@ export function RewardsSheet() {
                       <View className="flex-row items-center gap-1.5 mt-1.5">
                         {canRedeem ? <Zap size={11} color="#C8102E" fill="#C8102E" /> : <Lock size={11} color="#9494A0" />}
                         <Text className={cn('text-xs font-bold', canRedeem ? 'text-ex-red' : 'text-ink-400')}>
-                          {reward.points_cost === 0 ? 'Ücretsiz (doğum günü)' : `${reward.points_cost} puan`}
+                          {formatRewardCost(reward.points_cost)}
                         </Text>
                       </View>
                     </View>
@@ -207,7 +210,7 @@ export function RewardsSheet() {
                       disabled={!canRedeem || alreadyRedeemed}
                       onPress={() => redeem(reward.id, reward.title, reward.points_cost)}
                     >
-                      {alreadyRedeemed ? 'Bitti' : canRedeem ? 'Kullan' : 'Kilitli'}
+                      {getRewardButtonLabel(canRedeem, alreadyRedeemed)}
                     </Button>
                   </Card>
                 );

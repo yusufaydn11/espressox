@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/Charts';
 import { useAdmin, genId } from '@/context/AdminContext';
+import { REWARD_CATEGORY_LABELS } from '@shared/constants/loyalty';
 import { cn } from '@/lib/utils';
 import type { Reward } from '@/lib/supabase';
 import type { Challenge } from '@/types';
 
-const categoryLabels: Record<string, string> = { coffee: 'Kahve', dessert: 'Tatlı', discount: 'İndirim', exclusive: 'Özel', birthday: 'Doğum Günü' };
+const categoryLabels = REWARD_CATEGORY_LABELS;
 const categoryOptions = Object.entries(categoryLabels).map(([k, v]) => ({ label: v, value: k }));
 const challengeTypeOptions = [
   { label: 'Haftalık', value: 'weekly' }, { label: 'Aylık', value: 'monthly' }, { label: 'Seri', value: 'streak' },

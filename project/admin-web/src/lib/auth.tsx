@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { supabase, type AdminRole, type UserProfile, type UserRoleRow } from './supabase';
+import { pickPrimaryRole } from './roles';
 
-const ADMIN_ROLES: AdminRole[] = ['super_admin', 'franchise', 'store_manager', 'staff'];
+const ADMIN_ROLES: AdminRole[] = ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'];
 
 interface AuthContextValue {
   loading: boolean;
@@ -81,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null); setProfile(null); setRoles([]); setRolesLoaded(false);
   }, []);
 
-  const primaryRole: AdminRole | null = roles.find(r => ADMIN_ROLES.includes(r.role))?.role ?? null;
+  const primaryRole: AdminRole | null = pickPrimaryRole(
+    roles.filter(r => ADMIN_ROLES.includes(r.role)) as { role: AdminRole }[],
+  );
   const storeId = roles.find(r => r.store_id)?.store_id ?? null;
   const isAdmin = primaryRole !== null;
 

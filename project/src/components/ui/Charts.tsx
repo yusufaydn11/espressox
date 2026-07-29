@@ -10,7 +10,7 @@ interface BarChartProps {
   formatValue?: (n: number) => string;
 }
 
-export function BarChart({ data, color = '#C8102E', height = 140, formatValue = (n) => `${n}` }: BarChartProps) {
+export function BarChart({ data, color = '#C8102E', height = 140, formatValue: _formatValue = (n) => `${n}` }: BarChartProps) {
   const max = Math.max(...data.map(d => d.value));
   return (
     <View className="flex-row items-end justify-between gap-2" style={{ height }}>

@@ -9,7 +9,6 @@ import { useAdmin } from '@/context/AdminContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmDialog, Select, TextInput, Toggle } from '@/components/ui/Modal';
-import { cn } from '@/lib/utils';
 
 type FranchiseUser = {
   userId: string;
@@ -21,7 +20,7 @@ type FranchiseUser = {
 
 type CreatedCreds = {
   email: string;
-  password: string;
+  password?: string;
   storeName: string;
 };
 
@@ -174,7 +173,13 @@ export function AdminFranchise() {
 
             <View className="gap-3">
               <CredRow label="E-posta" value={creds.email} copied={copied === 'email'} onCopy={() => copy(creds.email, 'email')} />
-              <CredRow label="Şifre" value={creds.password} copied={copied === 'pass'} onCopy={() => copy(creds.password, 'pass')} />
+              {creds.password ? (
+                <CredRow label="Şifre" value={creds.password} copied={copied === 'pass'} onCopy={() => copy(creds.password!, 'pass')} />
+              ) : (
+                <Text className="text-xs text-ink-500 text-center leading-relaxed px-2">
+                  Güvenlik nedeniyle otomatik şifre gösterilmez. Şifreyi oluştururken &quot;Özel şifre&quot; seçeneğini kullanın veya Supabase Dashboard üzerinden sıfırlayın.
+                </Text>
+              )}
             </View>
 
             <Text className="text-xs text-ink-400 text-center leading-relaxed">
@@ -253,7 +258,7 @@ function CreateFranchiseModal({
       const storeName = (res.storeName as string) ?? '';
       onCreated({
         email: (res.email as string) ?? email,
-        password: (res.password as string) ?? customPassword,
+        ...(useCustomPass && customPassword.trim() ? { password: customPassword.trim() } : {}),
         storeName,
       });
       showToast('Franchise yetkilisi oluşturuldu');

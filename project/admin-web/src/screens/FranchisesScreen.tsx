@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Building2, Phone, Mail } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building2 } from 'lucide-react';
 import { fetchFranchises, createFranchise, updateFranchise, deleteFranchise } from '../lib/api';
 import { Card, Spinner, ErrorState, EmptyState, Badge, Button, PageHeader, Modal, SearchInput, Pagination, ConfirmDialog } from '../lib/ui';
 import { useToast } from '../lib/toast';

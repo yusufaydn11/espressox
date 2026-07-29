@@ -21,3 +21,9 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+admin-web/.env.production
+
+supabase/.temp/
+
+*.tsbuildinfo

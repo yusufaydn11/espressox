@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { CheckCircle2, XCircle, Clock, Wallet, Boxes, Trash2, RotateCcw, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ import {
   B2B_PAYMENT_STATUS_LABELS, B2B_PAYMENT_STATUS_TONES,
   type B2BPayment, type B2BOrderTemplate,
 } from '@/services/b2b';
+import { sumSuccessfulPaymentAmount } from '@shared/utils/payments';
 import {
   B2BScreenWrapper, B2BSectionTitle, B2BStatusBadge,
   B2BLoadingSpinner, B2BErrorState, B2BEmptyState, B2BConfirmDialog,
@@ -15,7 +16,7 @@ import {
 
 type ToastFn = (msg: string) => void;
 
-export function B2BPayments({ franchiseId }: { franchiseId: string }) {
+export function B2BPayments({ franchiseId: _franchiseId }: { franchiseId: string }) {
   const [payments, setPayments] = useState<B2BPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export function B2BPayments({ franchiseId }: { franchiseId: string }) {
   if (loading) return <B2BScreenWrapper><B2BLoadingSpinner label="Ödemeler yükleniyor…" /></B2BScreenWrapper>;
   if (error) return <B2BScreenWrapper><B2BErrorState message={error} onRetry={load} /></B2BScreenWrapper>;
 
-  const totalSuccess = payments.filter(p => p.status === 'success').reduce((s, p) => s + p.amount, 0);
+  const totalSuccess = sumSuccessfulPaymentAmount(payments);
 
   return (
     <B2BScreenWrapper>
@@ -155,11 +156,12 @@ export function B2BTemplates({ showToast }: { showToast: ToastFn }) {
   );
 }
 
-export function B2BNotifications({ storeId, onOpenOrder }: { storeId: string; onOpenOrder?: (orderId: string) => void }) {
+export function B2BNotifications({ storeId: _storeId, onOpenOrder }: { storeId: string; onOpenOrder?: (orderId: string) => void }) {
   const [notifs, setNotifs] = useState<Array<{ id: string; title: string; body: string; is_read: boolean; type: string; data: { order_id?: string; source?: string } | null; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveIndicator, setLiveIndicator] = useState(false);
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -174,13 +176,20 @@ export function B2BNotifications({ storeId, onOpenOrder }: { storeId: string; on
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
     const unsubscribe = notificationService.subscribeRealtime((newNotif) => {
       setNotifs(prev => [newNotif, ...prev].slice(0, 50));
       setLiveIndicator(true);
-      setTimeout(() => setLiveIndicator(false), 2000);
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+      liveTimerRef.current = setTimeout(() => {
+        setLiveIndicator(false);
+        liveTimerRef.current = null;
+      }, 2000);
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    };
   }, [load]);
 
   const handlePress = async (n: { id: string; is_read: boolean; data: { order_id?: string } | null }) => {

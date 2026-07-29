@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, RefreshCw, Edit2, Trash2, Crown, Search, X } from 'lucide-react';
+import { Plus, RefreshCw, Edit2, Trash2, Crown } from 'lucide-react';
 import { fetchRewards, createReward, updateReward, deleteReward } from '../lib/api';
 import { Card, Spinner, ErrorState, EmptyState, Button, PageHeader, Modal, Badge, SearchInput, Pagination, ConfirmDialog } from '../lib/ui';
 import { useToast } from '../lib/toast';

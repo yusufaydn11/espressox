@@ -27,12 +27,17 @@ export function B2BErrorState({ message, onRetry }: { message: string; onRetry?:
   );
 }
 
-export function B2BEmptyState({ title, subtitle, icon }: { title: string; subtitle?: string; icon?: ReactNode }) {
+export function B2BEmptyState({ title, subtitle, icon, action }: {
+  title: string; subtitle?: string; icon?: ReactNode; action?: ReactNode;
+}) {
   return (
     <View className="rounded-2xl bg-white border border-ink-100 shadow-card p-10 items-center">
-      {icon ?? <Inbox size={32} color="#C8C4CC" />}
-      <Text className="text-sm text-ink-400 mt-3">{title}</Text>
-      {subtitle && <Text className="text-xs text-ink-300 mt-1">{subtitle}</Text>}
+      <View className="h-14 w-14 rounded-2xl bg-cream-100 items-center justify-center mb-3">
+        {icon ?? <Inbox size={28} color="#C8C4CC" />}
+      </View>
+      <Text className="text-sm font-medium text-ink-600">{title}</Text>
+      {subtitle && <Text className="text-xs text-ink-400 mt-1.5 text-center leading-relaxed max-w-[240px]">{subtitle}</Text>}
+      {action && <View className="mt-4">{action}</View>}
     </View>
   );
 }

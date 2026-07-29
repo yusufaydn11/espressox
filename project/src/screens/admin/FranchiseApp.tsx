@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import {
   LayoutDashboard, ShoppingBag, ScanLine, BarChart3, Bell,
@@ -9,8 +9,27 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
+import {
+  fetchStoreOrders,
+  updateOrderStatusByNumber,
+} from '@/services/orders';
+import {
+  ORDER_STATUS_LABELS_FRANCHISE,
+  ORDER_STATUS_BADGE_BG,
+  ORDER_STATUS_BADGE_TEXT,
+  nextOrderStatus,
+} from '@shared/constants/orders';
+import { setB2BOrderTapHandler } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import {
+  fetchForStorePanel,
+  markNotificationRead,
+} from '@/services/notifications';
+import {
+  getNotificationBadge,
+  isB2BSource,
+} from '@shared/constants/notifications';
 import { AdminScanner } from '@/screens/admin/AdminScanner';
 import { FranchiseReports } from '@/screens/admin/FranchiseReports';
 
@@ -22,6 +41,11 @@ import { B2BOrders } from '@/screens/b2b/B2BOrders';
 import { B2BOrderDetail } from '@/screens/b2b/B2BOrderDetail';
 import { B2BAccount, B2BInvoices } from '@/screens/b2b/B2BAccount';
 import { B2BPayments, B2BTemplates, B2BNotifications } from '@/screens/b2b/B2BMore';
+
+const statusLabel = (s: string) => ORDER_STATUS_LABELS_FRANCHISE[s] ?? s;
+const statusBadge = (s: string) => ORDER_STATUS_BADGE_BG[s] ?? 'bg-ink-100';
+const statusBadgeText = (s: string) => ORDER_STATUS_BADGE_TEXT[s] ?? 'text-ink-600';
+const nextStatus = nextOrderStatus;
 
 type FranchisePage = string;
 
@@ -40,6 +64,7 @@ const navItems: Array<{ id: string; label: string; icon: LucideIcon; group: stri
   { id: 'b2b_cart', label: 'Sepet', icon: ShoppingCart, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   { id: 'b2b_orders', label: 'Siparişlerim', icon: PackageCheck, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   { id: 'b2b_templates', label: 'Favori Siparişler', icon: Boxes, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
+  { id: 'b2b_notifications', label: 'B2B Bildirimleri', icon: Bell, group: 'B2B Tedarik', roles: ['franchise', 'store_manager'] },
   // ── B2B Finans ──
   { id: 'b2b_account', label: 'Cari Hesap', icon: BookOpen, group: 'B2B Finans', roles: ['franchise'] },
   { id: 'b2b_invoices', label: 'Faturalar', icon: Receipt, group: 'B2B Finans', roles: ['franchise'] },
@@ -87,22 +112,49 @@ export function FranchiseApp() {
   const [storeName, setStoreName] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [pendingNotifOrderId, setPendingNotifOrderId] = useState<string | null>(null);
+
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 2600);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 2600);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
+
+  const handleSelectOrder = useCallback((orderId: string, source?: string) => {
+    if (isB2BSource(source)) {
+      setSelectedOrderId(orderId);
+      setPage('b2b_order_detail');
+    } else {
+      setPage('orders');
+    }
   }, []);
 
   useEffect(() => {
-    if (storeId) {
-      const s = stores.find(st => st.id === storeId);
-      if (s) setStoreName(s.name);
-      else {
-        supabase.from('stores').select('name').eq('id', storeId).maybeSingle()
-          .then(({ data }) => { if (data) setStoreName((data as { name: string }).name); });
-      }
+    setB2BOrderTapHandler(handleSelectOrder);
+    return () => setB2BOrderTapHandler(null);
+  }, [handleSelectOrder]);
+
+  useEffect(() => {
+    if (!storeId) { setStoreName(''); return; }
+    let cancelled = false;
+    const s = stores.find(st => st.id === storeId);
+    if (s) {
+      setStoreName(s.name);
+      return;
     }
+    void supabase.from('stores').select('name').eq('id', storeId).maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setStoreName((data as { name: string }).name);
+      });
+    return () => { cancelled = true; };
   }, [storeId, stores]);
 
   // Build nav from unified nav array
@@ -132,11 +184,6 @@ export function FranchiseApp() {
   };
 
   const roleLabel = role === 'franchise' ? 'Franchise Yetkilisi' : role === 'store_manager' ? 'Mağaza Müdürü' : 'Personel';
-
-  const handleSelectOrder = (orderId: string) => {
-    setSelectedOrderId(orderId);
-    setPage('b2b_order_detail');
-  };
 
   return (
     <View className="flex-1 bg-cream-50 flex-row">
@@ -219,7 +266,7 @@ export function FranchiseApp() {
         <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
           {/* Store Operations */}
           {page === 'dashboard' && <FranchiseDashboard storeId={storeId} storeName={storeName} onGoOrders={() => setPage('orders')} />}
-          {page === 'orders' && <FranchiseOrders storeId={storeId} />}
+          {page === 'orders' && <FranchiseOrders storeId={storeId} readOnly={role === 'staff'} />}
           {page === 'scanner' && <AdminScanner />}
           {page === 'reports' && <FranchiseReports storeId={storeId} storeName={storeName} />}
           {page === 'notifications' && <FranchiseNotifications storeId={storeId} onOpenOrder={handleSelectOrder} />}
@@ -272,14 +319,9 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
     if (!storeId) { setLoading(false); return; }
     setLoading(true);
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(id)')
-      .eq('store_id', storeId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) { setLoading(false); return; }
-    const all = (data ?? []) as (Record<string, unknown> & { id: string; order_number: string; total: string; status: string; order_type: string; created_at: string; order_items: { id: string }[] })[];
+    const { data, error } = await fetchStoreOrders(storeId, 50);
+    if (error || !data) { setLoading(false); return; }
+    const all = data;
     const todayRows = all.filter(o => new Date(o.created_at) >= today);
     setStats({
       todayOrders: todayRows.length,
@@ -347,38 +389,7 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
   );
 }
 
-const STATUS_FLOW = ['preparing', 'ready', 'picked-up', 'delivered'] as const;
-function nextStatus(current: string): string | null {
-  const idx = STATUS_FLOW.indexOf(current as typeof STATUS_FLOW[number]);
-  if (idx === -1 || idx === STATUS_FLOW.length - 1) return null;
-  return STATUS_FLOW[idx + 1];
-}
-
-function statusLabel(s: string): string {
-  const map: Record<string, string> = {
-    preparing: 'Hazırlanıyor', ready: 'Hazır', 'picked-up': 'Alındı',
-    delivered: 'Teslim Edildi', scheduled: 'Planlandı', cancelled: 'İptal',
-  };
-  return map[s] ?? s;
-}
-function statusBadge(s: string): string {
-  const map: Record<string, string> = {
-    preparing: 'bg-amber-50', ready: 'bg-blue-50',
-    'picked-up': 'bg-green-50', delivered: 'bg-green-50',
-    scheduled: 'bg-ink-100', cancelled: 'bg-red-50',
-  };
-  return map[s] ?? 'bg-ink-100';
-}
-function statusBadgeText(s: string): string {
-  const map: Record<string, string> = {
-    preparing: 'text-amber-700', ready: 'text-blue-700',
-    'picked-up': 'text-green-700', delivered: 'text-green-700',
-    scheduled: 'text-ink-600', cancelled: 'text-ex-red',
-  };
-  return map[s] ?? 'text-ink-600';
-}
-
-function FranchiseOrders({ storeId }: { storeId: string | null }) {
+function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOnly?: boolean }) {
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -387,14 +398,9 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
   const load = useCallback(async () => {
     if (!storeId) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(id)')
-      .eq('store_id', storeId)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) { setLoading(false); return; }
-    const all = (data ?? []) as (Record<string, unknown> & { id: string; order_number: string; total: string; status: string; order_type: string; created_at: string; order_items: { id: string }[] })[];
+    const { data, error } = await fetchStoreOrders(storeId, 100);
+    if (error || !data) { setLoading(false); return; }
+    const all = data;
     setOrders(all.map(o => ({
       id: o.order_number,
       customer: 'Müşteri',
@@ -414,7 +420,7 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
     const next = nextStatus(currentStatus);
     if (!next) return;
     setUpdating(orderNumber);
-    const { error } = await supabase.from('orders').update({ status: next }).eq('order_number', orderNumber);
+    const { error } = await updateOrderStatusByNumber(orderNumber, next);
     if (!error) {
       setOrders(prev => prev.map(o => o.id === orderNumber ? { ...o, status: next } : o));
     }
@@ -460,6 +466,7 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
                 </View>
                 <Text className="text-base font-bold text-ex-red">₺{o.total.toLocaleString('tr-TR')}</Text>
               </View>
+              {!readOnly && (
               <View className="flex-row items-center gap-2 mt-3">
                 {o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'picked-up' && (
                   <Pressable
@@ -484,6 +491,7 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
                   </Pressable>
                 )}
               </View>
+              )}
             </View>
           ))}
         </View>
@@ -492,35 +500,37 @@ function FranchiseOrders({ storeId }: { storeId: string | null }) {
   );
 }
 
-function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | null; onOpenOrder: (orderId: string) => void }) {
+function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | null; onOpenOrder: (orderId: string, source?: string) => void }) {
+  const { user } = useAuth();
   const [notifs, setNotifs] = useState<(StoreNotif & { data: Record<string, unknown> | null })[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!storeId) { setLoading(false); return; }
+    if (!user?.id) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('id, title, body, created_at, is_read, data')
-      .or(`data->>store_id.eq.${storeId}`)
-      .order('created_at', { ascending: false })
-      .limit(30);
-    if (error) { setLoading(false); return; }
-    const filtered = ((data ?? []) as (StoreNotif & { data: Record<string, unknown> })[])
-      .filter(n => (n.data as Record<string, unknown>)?.store_id === storeId);
-    setNotifs(filtered.map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, is_read: n.is_read, data: n.data })));
+    const { data, error } = await fetchForStorePanel(user.id, storeId, 30);
+    if (error || !data) { setLoading(false); return; }
+    setNotifs(data.map(n => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      created_at: n.created_at,
+      is_read: n.is_read,
+      data: n.data as Record<string, unknown> | null,
+    })));
     setLoading(false);
-  }, [storeId]);
+  }, [storeId, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   const handlePress = async (n: StoreNotif & { data: Record<string, unknown> | null }) => {
     if (!n.is_read) {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
+      await markNotificationRead(n.id);
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
     }
     const orderId = n.data?.order_id as string | undefined;
-    if (orderId) onOpenOrder(orderId);
+    const source = n.data?.source as string | undefined;
+    if (orderId) onOpenOrder(orderId, source);
   };
 
   if (loading) return <View className="items-center justify-center py-20"><View className="h-8 w-8 rounded-full border-2 border-ex-red border-t-transparent" /></View>;
@@ -536,13 +546,14 @@ function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | nu
       ) : (
         notifs.map(n => {
           const orderId = n.data?.order_id as string | undefined;
-          const isB2B = (n.data?.source as string | undefined)?.startsWith('b2b');
+          const isB2B = isB2BSource(n.data?.source as string | undefined);
+          const badge = getNotificationBadge(n.is_read);
           return (
             <Pressable key={n.id} onPress={() => handlePress(n)} disabled={!orderId}>
               <View className={cn('rounded-2xl border shadow-card p-4', n.is_read ? 'bg-white border-ink-100' : 'bg-white border-ex-red/20', orderId && 'active:opacity-70')}>
                 <View className="flex-row items-start gap-3">
-                  <View className={cn('h-9 w-9 rounded-xl items-center justify-center shrink-0', n.is_read ? 'bg-ink-50' : 'bg-ex-red/10')}>
-                    <Bell size={16} color={n.is_read ? '#9494A0' : '#C8102E'} />
+                  <View className={cn('h-9 w-9 rounded-xl items-center justify-center shrink-0', badge.container)}>
+                    <Bell size={16} color={badge.iconColor} />
                   </View>
                   <View className="flex-1 min-w-0">
                     <View className="flex-row items-center gap-2">

@@ -1,5 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, type Product, type Store, type Reward, type OrderRow, type OrderItemRow, type PointsHistoryRow, type LoyaltyStampRow, type RewardRedemptionRow, type CampaignRow, type NotificationRow, type NotificationPrefsRow, type QrCodeRow, type QrScanRow, type Profile } from '@/lib/supabase';
+import { supabase, type Store, type Reward, type CampaignRow, type NotificationPrefsRow } from '@/lib/supabase';
+import { fetchOrdersByUserId, createOrder as createOrderService } from '@/services/orders';
+import {
+  fetchByUserId,
+  fetchPrefs,
+  markNotificationRead,
+  updatePrefs,
+} from '@/services/notifications';
+import {
+  fetchActiveRewards,
+  fetchPointsHistory,
+  fetchLoyaltyStamps,
+  fetchRewardRedemptions,
+  fetchQrCode,
+  fetchQrScans,
+  redeemReward as redeemRewardService,
+} from '@/services/loyalty';
+import {
+  fetchActiveProducts,
+} from '@/services/products';
 import { useAuth } from '@/context/AuthContext';
 
 export function useAsync<T>(fn: () => Promise<{ data: T | null; error: string | null }>, deps: unknown[]) {
@@ -14,6 +33,7 @@ export function useAsync<T>(fn: () => Promise<{ data: T | null; error: string | 
     if (e) setError(e);
     else setData(d);
     setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- caller-supplied dependency list
   }, deps);
 
   useEffect(() => { reload(); }, [reload]);
@@ -22,15 +42,7 @@ export function useAsync<T>(fn: () => Promise<{ data: T | null; error: string | 
 }
 
 export function useProducts() {
-  return useAsync(async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('in_stock', true)
-      .order('sort_order', { ascending: true });
-    if (error) return { data: null, error: error.message };
-    return { data: data as Product[], error: null };
-  }, []);
+  return useAsync(async () => fetchActiveProducts(), []);
 }
 
 export function useStores() {
@@ -45,30 +57,14 @@ export function useStores() {
 }
 
 export function useRewards() {
-  return useAsync(async () => {
-    const { data, error } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('is_active', true);
-    if (error) return { data: null, error: error.message };
-    return { data: data as Reward[], error: null };
-  }, []);
+  return useAsync(async () => fetchActiveRewards(), []);
 }
 
 export function useOrders() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    if (error) return { data: null, error: error.message };
-    return { data: data as (OrderRow & { order_items: OrderItemRow[] })[], error: null };
+    return fetchOrdersByUserId(user.id);
   }, [user?.id]);
 }
 
@@ -76,14 +72,7 @@ export function usePointsHistory() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('points_history')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (error) return { data: null, error: error.message };
-    return { data: data as PointsHistoryRow[], error: null };
+    return fetchPointsHistory(user.id);
   }, [user?.id]);
 }
 
@@ -91,13 +80,7 @@ export function useLoyaltyStamps() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('loyalty_stamps')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('stamped_at', { ascending: false });
-    if (error) return { data: null, error: error.message };
-    return { data: data as LoyaltyStampRow[], error: null };
+    return fetchLoyaltyStamps(user.id);
   }, [user?.id]);
 }
 
@@ -105,13 +88,7 @@ export function useRewardRedemptions() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('reward_redemptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('redeemed_at', { ascending: false });
-    if (error) return { data: null, error: error.message };
-    return { data: data as RewardRedemptionRow[], error: null };
+    return fetchRewardRedemptions(user.id);
   }, [user?.id]);
 }
 
@@ -133,14 +110,7 @@ export function useNotifications() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (error) return { data: null, error: error.message };
-    return { data: data as NotificationRow[], error: null };
+    return fetchByUserId(user.id);
   }, [user?.id]);
 }
 
@@ -148,22 +118,7 @@ export function useNotificationPrefs() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: null, error: null };
-    const { data, error } = await supabase
-      .from('notification_preferences')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (error) return { data: null, error: error.message };
-    if (!data) {
-      const { data: created, error: insErr } = await supabase
-        .from('notification_preferences')
-        .insert({ user_id: user.id })
-        .select('*')
-        .maybeSingle();
-      if (insErr) return { data: null, error: insErr.message };
-      return { data: created as NotificationPrefsRow, error: null };
-    }
-    return { data: data as NotificationPrefsRow, error: null };
+    return fetchPrefs(user.id);
   }, [user?.id]);
 }
 
@@ -171,23 +126,7 @@ export function useQrCode() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: null, error: null };
-    const { data, error } = await supabase
-      .from('qr_codes')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (error) return { data: null, error: error.message };
-    if (!data) {
-      const code = `EX-${user.id.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-      const { data: created, error: insErr } = await supabase
-        .from('qr_codes')
-        .insert({ user_id: user.id, code })
-        .select('*')
-        .maybeSingle();
-      if (insErr) return { data: null, error: insErr.message };
-      return { data: created as QrCodeRow, error: null };
-    }
-    return { data: data as QrCodeRow, error: null };
+    return fetchQrCode(user.id);
   }, [user?.id]);
 }
 
@@ -195,14 +134,7 @@ export function useQrScans() {
   const { user } = useAuth();
   return useAsync(async () => {
     if (!user) return { data: [], error: null };
-    const { data, error } = await supabase
-      .from('qr_scans')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('scanned_at', { ascending: false })
-      .limit(20);
-    if (error) return { data: null, error: error.message };
-    return { data: data as QrScanRow[], error: null };
+    return fetchQrScans(user.id);
   }, [user?.id]);
 }
 
@@ -218,27 +150,27 @@ export function useCreateOrder() {
   }) => {
     if (!user) return { error: 'Giriş yapmalısınız' };
 
-    const itemsJson = JSON.stringify(params.items.map(it => ({
-      productId: it.productId ?? null,
-      name: it.name,
-      qty: it.qty,
-      price: it.price,
-    })));
-
-    const { data, error } = await supabase.rpc('create_order', {
-      p_items: itemsJson,
-      p_total: params.total,
-      p_store_id: params.storeId ?? null,
-      p_store_name: params.storeName,
-      p_order_type: params.orderType,
+    const result = await createOrderService({
+      items: params.items.map(it => ({
+        name: it.name,
+        qty: it.qty,
+        price: it.price,
+        productId: it.productId ?? null,
+      })),
+      total: params.total,
+      storeId: params.storeId ?? null,
+      storeName: params.storeName,
+      orderType: params.orderType,
     });
 
-    if (error) return { error: error.message };
-    const result = data as { error: string | null; order_number: string };
     if (result.error) return { error: result.error };
 
     await refreshProfile();
-    return { error: null };
+    return {
+      error: null,
+      orderNumber: result.orderNumber,
+      pointsEarned: result.pointsEarned ?? 0,
+    };
   }, [user, refreshProfile]);
 }
 
@@ -248,12 +180,7 @@ export function useRedeemReward() {
   return useCallback(async (reward: Reward) => {
     if (!user) return { error: 'Giriş yapmalısınız' };
 
-    const { data, error } = await supabase.rpc('redeem_reward', {
-      p_reward_id: reward.id,
-    });
-
-    if (error) return { error: error.message };
-    const result = data as { error: string | null; needed?: number };
+    const result = await redeemRewardService(reward.id);
     if (result.error === 'insufficient_points') {
       return { error: `${result.needed ?? 0} puana daha ihtiyacın var` };
     }
@@ -265,17 +192,7 @@ export function useRedeemReward() {
 }
 
 export async function updateNotificationPrefs(userId: string, prefs: Partial<NotificationPrefsRow>) {
-  const { error } = await supabase
-    .from('notification_preferences')
-    .update(prefs)
-    .eq('user_id', userId);
-  return { error: error?.message ?? null };
+  return updatePrefs(userId, prefs);
 }
 
-export async function markNotificationRead(id: string) {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('id', id);
-  return { error: error?.message ?? null };
-}
+export { markNotificationRead };

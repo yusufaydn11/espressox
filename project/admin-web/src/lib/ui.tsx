@@ -1,4 +1,4 @@
-import { type ReactNode, type ButtonHTMLAttributes, useState, type ReactNode as TReactNode } from 'react';
+import { type ReactNode, type ButtonHTMLAttributes, type ReactNode as TReactNode } from 'react';
 import { Search, ChevronLeft, ChevronRight, Inbox, X } from 'lucide-react';
 import { cn } from './utils';
 

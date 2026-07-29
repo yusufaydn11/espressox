@@ -1,17 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ShoppingBag, Filter, RefreshCw, ChevronRight } from 'lucide-react';
+import { RefreshCw, ChevronRight } from 'lucide-react';
 import { fetchOrders, updateOrderStatus } from '../lib/api';
-import { Card, Spinner, ErrorState, EmptyState, Badge, Button, PageHeader, Modal, SearchInput, Pagination, FilterChips } from '../lib/ui';
+import { Card, Spinner, ErrorState, EmptyState, Button, PageHeader, Modal, SearchInput, Pagination, FilterChips } from '../lib/ui';
 import { useToast } from '../lib/toast';
+import { useAuth } from '../lib/auth';
 import { formatTRY, formatDateTime } from '../lib/utils';
 import type { OrderRow, OrderItemRow } from '../lib/supabase';
 
 const STATUSES = ['all', 'pending', 'preparing', 'ready', 'picked-up', 'delivered', 'cancelled'] as const;
 type Status = typeof STATUSES[number];
-const statusLabels: Record<string, string> = {
-  all: 'Tümü', pending: 'Yeni', preparing: 'Hazırlanıyor', ready: 'Hazır',
-  'picked-up': 'Teslim Alındı', delivered: 'Teslim Edildi', cancelled: 'İptal',
-};
+import { ORDER_STATUS_LABELS_ADMIN } from '@shared/constants/orders';
 const PAGE_SIZE = 15;
 
 export function OrdersScreen() {
@@ -23,6 +21,8 @@ export function OrdersScreen() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<(OrderRow & { order_items: OrderItemRow[] }) | null>(null);
   const { success, error: toastError } = useToast();
+  const { primaryRole } = useAuth();
+  const canUpdateStatus = primaryRole !== 'staff';
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -67,7 +67,7 @@ export function OrdersScreen() {
         options={[...STATUSES]}
         value={filter}
         onChange={(v) => { setFilter(v); setPage(1); }}
-        labels={statusLabels}
+        labels={ORDER_STATUS_LABELS_ADMIN}
       />
 
       <div className="mb-4">
@@ -145,6 +145,7 @@ export function OrdersScreen() {
               </div>
             </div>
 
+            {canUpdateStatus && (
             <div>
               <h4 className="text-xs font-bold text-ink-400 uppercase tracking-wide mb-2">Durumu Değiştir</h4>
               <div className="flex flex-wrap gap-2">
@@ -154,11 +155,15 @@ export function OrdersScreen() {
                     onClick={() => changeStatus(selected.id, s)}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${selected.status === s ? 'bg-ex-red text-white shadow-red' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'}`}
                   >
-                    {statusLabels[s]}
+                    {ORDER_STATUS_LABELS_ADMIN[s]}
                   </button>
                 ))}
               </div>
             </div>
+            )}
+            {!canUpdateStatus && (
+              <p className="text-xs text-ink-400">Personel hesapları sipariş durumunu güncelleyemez.</p>
+            )}
           </div>
         )}
       </Modal>

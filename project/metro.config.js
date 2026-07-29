@@ -6,6 +6,7 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.alias = {
   '@': path.resolve(__dirname, './src'),
+  '@shared': path.resolve(__dirname, './shared'),
 };
 
 module.exports = withNativeWind(config, { input: './src/styles/global.css' });

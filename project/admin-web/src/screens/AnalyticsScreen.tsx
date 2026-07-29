@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -32,7 +32,7 @@ export function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const [t, c, h, s, ti, st, tp] = await Promise.all([
@@ -47,9 +47,9 @@ export function AnalyticsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [range]);
 
-  useEffect(() => { load(); }, [range]);
+  useEffect(() => { void load(); }, [load]);
 
   if (loading) return <Spinner label="Analitik veriler yükleniyor…" />;
   if (error) return <ErrorState message={error} onRetry={load} />;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { PackageCheck, ChevronRight, RotateCcw } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { PackageCheck, ChevronRight, RotateCcw, ChevronLeft } from 'lucide-react';
+import { usePagination } from '@/lib/usePagination';
 import {
   orderService,
   b2bFormatTRY, b2bFormatDate, B2B_ORDER_STATUS_LABELS, B2B_ORDER_STATUS_TONES,
@@ -52,6 +52,8 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
     return orders.filter(o => o.status === filter);
   }, [orders, filter]);
 
+  const { pageItems, page, setPage, totalPages, hasPrev, hasNext, total } = usePagination(filtered, 15);
+
   const handleCancel = async () => {
     if (!cancelTarget) return;
     try {
@@ -74,7 +76,16 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
     }
   };
 
-  if (loading) return <B2BScreenWrapper><B2BLoadingSpinner label="Siparişler yükleniyor…" /></B2BScreenWrapper>;
+  if (loading) {
+    return (
+      <B2BScreenWrapper>
+        <View className="gap-3 mb-2">
+          {[1, 2, 3].map(i => <View key={i} className="h-16 bg-ink-100 rounded-2xl" />)}
+        </View>
+        <B2BLoadingSpinner label="Siparişler yükleniyor…" />
+      </B2BScreenWrapper>
+    );
+  }
   if (error) return <B2BScreenWrapper><B2BErrorState message={error} onRetry={load} /></B2BScreenWrapper>;
 
   return (
@@ -84,10 +95,14 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
       <View className="mb-4"><B2BFilterChips options={STATUS_FILTERS} value={filter} onChange={setFilter} /></View>
 
       {filtered.length === 0 ? (
-        <B2BEmptyState title="Sipariş bulunamadı" subtitle="Bu filtrede sipariş yok" icon={<PackageCheck size={32} color="#C8C4CC" />} />
+        <B2BEmptyState
+          title={filter !== 'all' ? 'Bu filtrede sipariş yok' : 'Henüz sipariş yok'}
+          subtitle={filter !== 'all' ? 'Farklı bir filtre deneyin' : 'Tedarik ürünlerinden sipariş oluşturun'}
+          icon={<PackageCheck size={28} color="#C8C4CC" />}
+        />
       ) : (
         <View className="gap-3">
-          {filtered.map(o => (
+          {pageItems.map(o => (
             <View key={o.id}>
               <Pressable
                 onPress={() => onSelectOrder(o.id)}
@@ -130,6 +145,28 @@ export function B2BOrders({ showToast, onSelectOrder }: { showToast: ToastFn; on
               )}
             </View>
           ))}
+        </View>
+      )}
+
+      {totalPages > 1 && (
+        <View className="flex-row items-center justify-between mt-4 px-1">
+          <Text className="text-xs text-ink-400">{total} sipariş · Sayfa {page + 1}/{totalPages}</Text>
+          <View className="flex-row gap-2">
+            <Pressable
+              disabled={!hasPrev}
+              onPress={() => setPage(page - 1)}
+              className={`h-9 w-9 rounded-xl items-center justify-center ${hasPrev ? 'bg-ink-100' : 'bg-ink-50 opacity-40'}`}
+            >
+              <ChevronLeft size={16} color="#3D3D42" />
+            </Pressable>
+            <Pressable
+              disabled={!hasNext}
+              onPress={() => setPage(page + 1)}
+              className={`h-9 w-9 rounded-xl items-center justify-center ${hasNext ? 'bg-ink-100' : 'bg-ink-50 opacity-40'}`}
+            >
+              <ChevronRight size={16} color="#3D3D42" />
+            </Pressable>
+          </View>
         </View>
       )}
 

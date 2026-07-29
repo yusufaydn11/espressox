@@ -1,6 +1,7 @@
 // Core domain types for Espresso X
 
-export type Tier = 'Bronz' | 'Gümüş' | 'Altın' | 'Siyah' | 'VIP';
+import type { Tier, TierInfo } from '@shared/types/loyalty';
+export type { Tier, TierInfo };
 
 export type OrderType = 'pickup' | 'table' | 'delivery' | 'scheduled';
 
@@ -98,13 +99,6 @@ export interface Badge {
   icon: string;
   unlocked: boolean;
   date?: string;
-}
-
-export interface TierInfo {
-  name: Tier;
-  minPoints: number;
-  color: string;
-  perks: string[];
 }
 
 export interface Order {

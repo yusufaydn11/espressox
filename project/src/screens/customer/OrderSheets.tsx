@@ -1,13 +1,30 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Image, Linking } from 'react-native';
-import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin, Navigation, Clock, Wifi, Car, Phone, MessageCircle } from 'lucide-react';
+import { View, Text, Pressable, Image } from 'react-native';
+import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { formatPrice, cn } from '@/lib/utils';
 import { useStores, useCreateOrder } from '@/lib/hooks';
 import type { OrderType } from '@/types';
-import type { Store as StoreType } from '@/lib/supabase';
+
+const ORDER_ERROR_LABELS: Record<string, string> = {
+  account_blocked: 'Hesabınız engellenmiştir. Destek ile iletişime geçin.',
+  unauthenticated: 'Giriş yapmalısınız.',
+  invalid_order_type: 'Geçersiz sipariş türü.',
+  empty_cart: 'Sepetiniz boş.',
+  cart_too_large: 'Sepette çok fazla ürün var.',
+  missing_product_id: 'Ürün bilgisi eksik.',
+  invalid_quantity: 'Geçersiz ürün adedi.',
+  product_unavailable: 'Ürün mevcut değil veya stokta yok.',
+  price_tamper: 'Fiyat doğrulaması başarısız.',
+  invalid_total: 'Geçersiz sipariş tutarı.',
+};
+
+function formatOrderError(code: string): string {
+  return ORDER_ERROR_LABELS[code] ?? code;
+}
 
 export function CartSheet() {
   const { sheet, closeSheet, openSheet, cart, removeFromCart, updateQty, cartTotal, cartPoints } = useApp();
@@ -77,7 +94,8 @@ export function CartSheet() {
 }
 
 export function CheckoutSheet() {
-  const { sheet, closeSheet, openSheet, cart, cartTotal, clearCart, showToast } = useApp();
+  const { sheet, closeSheet, openSheet, cart, cartTotal, clearCart, showToast, setLastOrder } = useApp();
+  const { profile } = useAuth();
   const open = sheet === 'checkout';
   const [orderType, setOrderType] = useState<OrderType>('pickup');
   const [store, setStore] = useState('');
@@ -97,9 +115,17 @@ export function CheckoutSheet() {
   ];
 
   const placeOrder = async () => {
-    if (!selectedStore || cart.length === 0) return;
+    if (cart.length === 0) return;
+    if (!selectedStore) {
+      showToast('Sipariş için mağaza seçin veya mağaza listesini kontrol edin');
+      return;
+    }
+    if (profile?.is_blocked) {
+      showToast('Hesabınız engellenmiştir');
+      return;
+    }
     setPlacing(true);
-    const { error } = await createOrder({
+    const { error, orderNumber, pointsEarned } = await createOrder({
       items: cart.map(item => ({
         name: `${item.product.name} — ${item.size.label}${item.milk.id !== 'whole' ? ', ' + item.milk.label : ''}`,
         qty: item.quantity, price: item.unitPrice, productId: item.product.id,
@@ -107,7 +133,13 @@ export function CheckoutSheet() {
       total: cartTotal, storeId: selectedStore.id, storeName: selectedStore.name, orderType,
     });
     setPlacing(false);
-    if (error) { showToast('Sipariş başarısız: ' + error); return; }
+    if (error) { showToast('Sipariş başarısız: ' + formatOrderError(error)); return; }
+    setLastOrder({
+      orderNumber: orderNumber ?? '—',
+      storeName: selectedStore.name,
+      status: 'preparing',
+      pointsEarned: pointsEarned ?? 0,
+    });
     clearCart();
     showToast('Sipariş alındı! Puan kazanıyorsun…');
     openSheet('tracking');
@@ -200,21 +232,29 @@ export function CheckoutSheet() {
 }
 
 export function TrackingSheet() {
-  const { sheet, closeSheet } = useApp();
+  const { sheet, closeSheet, lastOrder } = useApp();
   const open = sheet === 'tracking';
+
+  const statusTitle = lastOrder?.status === 'preparing' ? 'Hazırlanıyor'
+    : lastOrder?.status === 'ready' ? 'Hazır'
+    : lastOrder?.status === 'delivered' ? 'Teslim Edildi'
+    : 'Sipariş Alındı';
+
   const steps = [
-    { label: 'Sipariş alındı', desc: 'Nişantaşı Mağaza', done: true },
-    { label: 'İçecekler hazırlanıyor', desc: 'Noah hazırlıyor', done: true, current: true },
-    { label: 'Alış için hazır', desc: 'Sana haber vereceğiz', done: false },
+    { label: 'Sipariş alındı', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
+    { label: 'Hazırlanıyor', desc: 'Barista ekibimiz hazırlıyor', done: true, current: lastOrder?.status === 'preparing' },
+    { label: 'Alış için hazır', desc: 'Hazır olunca bildirim alacaksın', done: false },
     { label: 'Afiyet olsun!', desc: 'Yudumla & tadını çıkar', done: false },
   ];
 
   return (
     <Sheet open={open} onClose={closeSheet} title="Sipariş takibi">
       <View className="items-center mb-6">
-        <Text className="text-xs text-ink-400">Sipariş EX-10473</Text>
-        <Text className="text-2xl font-bold text-ink-900">Hazırlanıyor</Text>
-        <Text className="text-sm text-ex-red mt-1 font-medium">~4 dakika içinde hazır</Text>
+        <Text className="text-xs text-ink-400">{lastOrder ? `Sipariş ${lastOrder.orderNumber}` : 'Sipariş takibi'}</Text>
+        <Text className="text-2xl font-bold text-ink-900">{statusTitle}</Text>
+        <Text className="text-sm text-ex-red mt-1 font-medium">
+          {lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan kazandın` : 'Siparişin işleniyor'}
+        </Text>
       </View>
 
       <View className="items-center mb-6">

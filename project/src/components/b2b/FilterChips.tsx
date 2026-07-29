@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Text, Pressable, ScrollView } from 'react-native';
 import { cn } from '@/lib/utils';
 
 interface B2BFilterChipsProps {

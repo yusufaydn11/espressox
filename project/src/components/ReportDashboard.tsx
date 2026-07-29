@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, Pressable, ScrollView, ActivityIndicator,
+  View, Text, Pressable, ScrollView,
 } from 'react-native';
 import {
-  Coffee, Gift, Award, TrendingUp, TrendingDown, Users, AlertTriangle, Clock, Activity, Calendar, Store as StoreIcon, Crown, ChevronDown,
+  Coffee, Gift, Award, TrendingUp, TrendingDown, Users, AlertTriangle, Clock, Activity, Store as StoreIcon, Crown, ChevronDown,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';

@@ -7,7 +7,6 @@ import { useToast } from '../lib/toast';
 import type { InventoryItem, StoreStock } from '../lib/supabase';
 
 export function InventoryScreen() {
-  const { success, error: toastError } = useToast();
   const { user } = useAuth();
   const [items, setItems] = useState<InventoryItem[] | null>(null);
   const [stock, setStock] = useState<StoreStock[] | null>(null);

@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, Pressable, Image, TextInput, ScrollView } from 'react-native';
-import { Package, ShoppingCart, Tag, AlertCircle } from 'lucide-react';
+import { View, Text, Pressable, Image, ScrollView } from 'react-native';
+import { Package, ShoppingCart, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePagination } from '@/lib/usePagination';
 import {
   productService, cartService,
   b2bFormatTRY, getEffectivePrice, hasActiveCampaign,
   type B2BProduct, type B2BProductStock, type B2BCartItem,
 } from '@/services/b2b';
+import {
+  findB2BStockQty,
+  filterB2BProductsByCategory,
+  filterB2BProductsBySearch,
+  deriveB2BCategories,
+} from '@shared/utils/b2b';
+import { B2B_PRODUCT_SEARCH_PLACEHOLDER } from '@shared/constants/b2b';
 import { B2BScreenWrapper, B2BSectionTitle, B2BSearchBar, B2BLoadingSpinner, B2BErrorState, B2BEmptyState } from '@/components/b2b';
 
 type ToastFn = (msg: string) => void;
@@ -35,23 +43,19 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const categories = useMemo(() => {
-    const set = new Set(products.map(p => p.category));
-    return ['all', ...Array.from(set).sort()];
-  }, [products]);
+  const categories = useMemo(() => deriveB2BCategories(products), [products]);
 
-  const filtered = useMemo(() => {
-    return products.filter(p => {
-      if (category !== 'all' && p.category !== category) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [products, search, category]);
+  const filtered = useMemo(
+    () => filterB2BProductsBySearch(
+      filterB2BProductsByCategory(products, category),
+      search,
+    ),
+    [products, search, category],
+  );
 
-  const getStockQty = (productId: string) => stock.find(s => s.product_id === productId)?.stock_qty ?? 0;
+  const { pageItems, page, setPage, totalPages, hasPrev, hasNext, total } = usePagination(filtered, 20);
+
+  const getStockQty = (productId: string) => findB2BStockQty(stock, productId);
 
   const addToCart = async (p: B2BProduct) => {
     const items = await cartService.add({
@@ -69,7 +73,7 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
     <B2BScreenWrapper>
       <B2BSectionTitle title="Tedarik Ürünleri" subtitle="Merkez depodan tedarik edilebilir ürünler" />
 
-      <View className="mb-3"><B2BSearchBar value={search} onChange={setSearch} placeholder="Ürün adı veya kodu ara…" /></View>
+      <View className="mb-3"><B2BSearchBar value={search} onChange={setSearch} placeholder={B2B_PRODUCT_SEARCH_PLACEHOLDER} /></View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2 mb-4">
         {categories.map(c => (
@@ -87,7 +91,7 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
         <B2BEmptyState title="Ürün bulunamadı" subtitle="Bu kriterlere uygun ürün yok" icon={<Package size={32} color="#C8C4CC" />} />
       ) : (
         <View className="gap-3">
-          {filtered.map(p => {
+          {pageItems.map(p => {
             const stockQty = getStockQty(p.id);
             const inStock = stockQty > 0;
             const effPrice = getEffectivePrice(p);
@@ -146,6 +150,20 @@ export function B2BProducts({ showToast }: { showToast: ToastFn }) {
               </View>
             );
           })}
+        </View>
+      )}
+
+      {totalPages > 1 && (
+        <View className="flex-row items-center justify-between mt-4 px-1">
+          <Text className="text-xs text-ink-400">{total} ürün · Sayfa {page + 1}/{totalPages}</Text>
+          <View className="flex-row gap-2">
+            <Pressable disabled={!hasPrev} onPress={() => setPage(page - 1)} className={cn('h-9 w-9 rounded-xl items-center justify-center', hasPrev ? 'bg-ink-100' : 'bg-ink-50 opacity-40')}>
+              <ChevronLeft size={16} color="#3D3D42" />
+            </Pressable>
+            <Pressable disabled={!hasNext} onPress={() => setPage(page + 1)} className={cn('h-9 w-9 rounded-xl items-center justify-center', hasNext ? 'bg-ink-100' : 'bg-ink-50 opacity-40')}>
+              <ChevronRight size={16} color="#3D3D42" />
+            </Pressable>
+          </View>
         </View>
       )}
     </B2BScreenWrapper>

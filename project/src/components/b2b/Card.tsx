@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 

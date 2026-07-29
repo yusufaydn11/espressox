@@ -3,11 +3,19 @@ import { View, Text, TextInput as RNTextInput, ScrollView, Pressable, Image } fr
 import { Search, Sparkles, Star } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useProducts } from '@/lib/hooks';
+import {
+  mapRetailDbProductsToUi,
+  deriveRetailCategories,
+  filterRetailProductsByCategory,
+  filterRetailProductsBySearch,
+  filterRetailRecommendedProducts,
+} from '@shared/utils/products';
+import { RETAIL_SEARCH_PLACEHOLDERS } from '@shared/constants/products';
+import type { RetailProductDbRow } from '@shared/types/products';
 import { ProductCard } from '@/components/ProductCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { StateWrapper } from '@/components/ui/States';
 import { cn } from '@/lib/utils';
-import type { Product as ProductType } from '@/types';
 
 export function MenuScreen() {
   const { favorites, setSelectedProduct, openSheet } = useApp();
@@ -16,32 +24,20 @@ export function MenuScreen() {
   const [query, setQuery] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
-  const products: ProductType[] = useMemo(() => {
-    if (!dbProducts) return [];
-    return dbProducts.map(p => ({
-      id: p.id, name: p.name, category: p.category, description: p.description,
-      price: Number(p.price), image: p.image, rating: Number(p.rating),
-      popular: p.popular, seasonal: p.seasonal, aiRecommended: p.ai_recommended,
-      calories: p.calories, allergens: p.allergens, sizes: p.sizes, milks: p.milks,
-      syrups: p.syrups, toppings: p.toppings, temperature: p.temperature,
-      iceLevels: p.ice_levels, nutrition: p.nutrition,
-    }));
-  }, [dbProducts]);
+  const products = useMemo(
+    () => mapRetailDbProductsToUi((dbProducts ?? []) as RetailProductDbRow[]),
+    [dbProducts],
+  );
 
-  const cats = useMemo(() => {
-    const set = new Set<string>();
-    products.forEach(p => set.add(p.category));
-    return ['Tümü', ...Array.from(set).sort()];
-  }, [products]);
+  const cats = useMemo(() => deriveRetailCategories(products), [products]);
 
-  const filtered = products.filter(p => {
-    if (active !== 'Tümü' && p.category !== active) return false;
-    if (query && !p.name.toLowerCase().includes(query.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = filterRetailProductsBySearch(
+    filterRetailProductsByCategory(products, active),
+    query,
+  );
 
   const favProducts = products.filter(p => favorites.includes(p.id));
-  const recommended = products.filter(p => p.aiRecommended).slice(0, 6);
+  const recommended = filterRetailRecommendedProducts(products).slice(0, 6);
 
   const selectCategory = (cat: string) => {
     setActive(cat);
@@ -62,7 +58,7 @@ export function MenuScreen() {
         <RNTextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="İçecek veya yemek ara…"
+          placeholder={RETAIL_SEARCH_PLACEHOLDERS.menu}
           placeholderTextColor="#9494A0"
           className="flex-1 text-sm text-ink-900"
         />

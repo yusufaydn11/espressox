@@ -18,6 +18,7 @@ import { StoresSheet } from '@/screens/customer/StoresSheet';
 import { AiAssistantSheet } from '@/screens/customer/AiAssistantSheet';
 import { NotificationSettingsSheet } from '@/screens/customer/NotificationSettingsSheet';
 import { AccountSettingsSheet } from '@/screens/customer/AccountSettingsSheet';
+import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
 
 export function CustomerApp() {
   const { tab, cartCount, cartTotal, openSheet } = useApp();
@@ -67,6 +68,7 @@ export function CustomerApp() {
       <AiAssistantSheet />
       <NotificationSettingsSheet />
       <AccountSettingsSheet />
+      <PasswordResetSheet />
       <RewardsSheet />
       <OrdersSheet />
     </View>

@@ -4,11 +4,21 @@ import {
 import type { CartItem, Product, ProductOption } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchEarnRate, addPoints as addPointsService, spendPoints as spendPointsService } from '@/services/loyalty';
+import { DEFAULT_EARN_RATE } from '@shared/constants/loyalty';
+import { computeCartPoints } from '@shared/utils/loyalty';
 
 type Theme = 'light' | 'dark';
 type Role = 'customer' | 'admin';
 export type Tab = 'home' | 'menu' | 'qr' | 'campaigns' | 'profile';
-type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'account' | 'qr' | 'rewards' | 'orders' | null;
+type SheetView = 'product' | 'cart' | 'checkout' | 'tracking' | 'ai' | 'stores' | 'promotions' | 'order-detail' | 'notifications' | 'account' | 'qr' | 'rewards' | 'orders' | 'reset-password' | null;
+
+export type LastOrder = {
+  orderNumber: string;
+  storeName: string;
+  status: string;
+  pointsEarned: number;
+};
 
 interface AppState {
   theme: Theme;
@@ -43,6 +53,9 @@ interface AppState {
 
   toast: string | null;
   showToast: (msg: string) => void;
+
+  lastOrder: LastOrder | null;
+  setLastOrder: (order: LastOrder | null) => void;
 }
 
 export interface Customization {
@@ -68,8 +81,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
+  const [earnRate, setEarnRate] = useState(DEFAULT_EARN_RATE);
 
   const points = profile?.points ?? 0;
+
+  useEffect(() => {
+    void fetchEarnRate().then(setEarnRate);
+  }, []);
 
   useEffect(() => {
     if (profile?.favorite_drinks) {
@@ -115,7 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  const cartPoints = Math.round(cartTotal * 0.2);
+  const cartPoints = computeCartPoints(cartTotal, earnRate);
 
   const openSheet = useCallback((s: SheetView) => setSheet(s), []);
   const closeSheet = useCallback(() => setSheet(null), []);
@@ -135,14 +154,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addPoints = useCallback((n: number) => {
     if (!profile) return;
-    supabase.rpc('add_points', { p_amount: n, p_title: 'Puan eklendi' })
-      .then(() => refreshProfile());
+    void addPointsService(n).then(() => refreshProfile());
   }, [profile, refreshProfile]);
 
   const spendPoints = useCallback((n: number) => {
     if (!profile) return;
-    supabase.rpc('spend_points', { p_amount: n, p_title: 'Ödül kullanıldı' })
-      .then(() => refreshProfile());
+    void spendPointsService(n).then(() => refreshProfile());
   }, [profile, refreshProfile]);
 
   const value: AppState = {
@@ -154,6 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     favorites, toggleFavorite,
     points, addPoints, spendPoints,
     toast, showToast,
+    lastOrder, setLastOrder,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

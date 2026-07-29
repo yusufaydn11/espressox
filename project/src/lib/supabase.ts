@@ -40,7 +40,7 @@ export type Profile = {
 export type UserRole = {
   id: string;
   user_id: string;
-  role: 'customer' | 'staff' | 'admin' | 'super_admin' | 'franchise';
+  role: 'customer' | 'staff' | 'store_manager' | 'admin' | 'super_admin' | 'franchise';
   store_id: string | null;
   created_at: string;
   updated_at: string;

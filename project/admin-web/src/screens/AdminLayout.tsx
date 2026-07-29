@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { cn } from '../lib/utils';
 import type { AdminRole } from '../lib/supabase';
+import { HQ_ROLES, ROLE_LABELS } from '@shared/constants/roles';
 
 interface NavItem {
   to: string;
@@ -21,50 +22,45 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Genel',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['super_admin', 'franchise', 'store_manager', 'staff'] },
-      { to: '/orders', label: 'Sipariş Yönetimi', icon: ShoppingBag, roles: ['super_admin', 'franchise', 'store_manager', 'staff'] },
-      { to: '/products', label: 'Ürün Yönetimi', icon: PackageOpen, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/categories', label: 'Kategori Yönetimi', icon: FolderTree, roles: ['super_admin'] },
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'] },
+      { to: '/orders', label: 'Sipariş Yönetimi', icon: ShoppingBag, roles: ['super_admin', 'admin', 'franchise', 'store_manager', 'staff'] },
+      { to: '/products', label: 'Ürün Yönetimi', icon: PackageOpen, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/categories', label: 'Kategori Yönetimi', icon: FolderTree, roles: [...HQ_ROLES] },
     ],
   },
   {
     section: 'Pazarlama',
     items: [
-      { to: '/campaigns', label: 'Kampanya Yönetimi', icon: Megaphone, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/coupons', label: 'Kupon Yönetimi', icon: Ticket, roles: ['super_admin'] },
-      { to: '/rewards', label: 'Ödüller', icon: Crown, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/loyalty', label: 'Sadakat Sistemi', icon: Crown, roles: ['super_admin'] },
-      { to: '/customers', label: 'Müşteri Yönetimi', icon: Users, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/notifications', label: 'Bildirim Yönetimi', icon: Bell, roles: ['super_admin', 'franchise', 'store_manager'] },
+      { to: '/campaigns', label: 'Kampanya Yönetimi', icon: Megaphone, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/coupons', label: 'Kupon Yönetimi', icon: Ticket, roles: [...HQ_ROLES] },
+      { to: '/rewards', label: 'Ödüller', icon: Crown, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/loyalty', label: 'Sadakat Sistemi', icon: Crown, roles: [...HQ_ROLES] },
+      { to: '/customers', label: 'Müşteri Yönetimi', icon: Users, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/notifications', label: 'Bildirim Yönetimi', icon: Bell, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
     ],
   },
   {
     section: 'Operasyon',
     items: [
-      { to: '/stores', label: 'Şube Yönetimi', icon: Store, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/franchises', label: 'Franchise Yönetimi', icon: Building2, roles: ['super_admin'] },
-      { to: '/employees', label: 'Personel Yönetimi', icon: UserCog, roles: ['super_admin', 'franchise', 'store_manager'] },
-      { to: '/inventory', label: 'Stok Yönetimi', icon: Boxes, roles: ['super_admin', 'store_manager', 'staff'] },
-      { to: '/b2b-orders', label: 'B2B Siparişleri', icon: PackageCheck, roles: ['super_admin'] },
-      { to: '/b2b-products', label: 'B2B Ürün Yönetimi', icon: PackageSearch, roles: ['super_admin'] },
+      { to: '/stores', label: 'Şube Yönetimi', icon: Store, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/franchises', label: 'Franchise Yönetimi', icon: Building2, roles: [...HQ_ROLES] },
+      { to: '/employees', label: 'Personel Yönetimi', icon: UserCog, roles: ['super_admin', 'admin', 'franchise', 'store_manager'] },
+      { to: '/inventory', label: 'Stok Yönetimi', icon: Boxes, roles: ['super_admin', 'admin', 'store_manager', 'staff'] },
+      { to: '/b2b-orders', label: 'B2B Siparişleri', icon: PackageCheck, roles: [...HQ_ROLES] },
+      { to: '/b2b-products', label: 'B2B Ürün Yönetimi', icon: PackageSearch, roles: [...HQ_ROLES] },
     ],
   },
   {
     section: 'Sistem',
     items: [
-      { to: '/analytics', label: 'Analitik', icon: BarChart3, roles: ['super_admin', 'franchise'] },
-      { to: '/reports', label: 'Raporlar', icon: BarChart3, roles: ['super_admin', 'franchise'] },
-      { to: '/settings', label: 'Ayarlar', icon: Settings, roles: ['super_admin'] },
+      { to: '/analytics', label: 'Analitik', icon: BarChart3, roles: ['super_admin', 'admin', 'franchise'] },
+      { to: '/reports', label: 'Raporlar', icon: BarChart3, roles: ['super_admin', 'admin', 'franchise'] },
+      { to: '/settings', label: 'Ayarlar', icon: Settings, roles: [...HQ_ROLES] },
     ],
   },
 ];
 
-const roleLabels: Record<AdminRole, string> = {
-  super_admin: 'Süper Admin',
-  franchise: 'Franchise Admin',
-  store_manager: 'Mağaza Müdürü',
-  staff: 'Personel',
-};
+const roleLabels = ROLE_LABELS;
 
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { profile, primaryRole, signOut } = useAuth();

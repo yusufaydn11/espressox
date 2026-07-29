@@ -1,4 +1,4 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text } from 'react-native';
 import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUpRight, Coffee, Crown, Zap } from 'lucide-react';
 import { StatCard, BarChart, LineChart, DonutChart } from '@/components/ui/Charts';
 import { Card } from '@/components/ui/Card';

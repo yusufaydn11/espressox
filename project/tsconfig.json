@@ -9,11 +9,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@shared/*": ["shared/*"],
       "@env": ["env.d.ts"]
     },
     "typeRoots": ["./node_modules/@types"],
     "types": ["nativewind/types"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"],
-  "exclude": ["node_modules", "supabase/functions"]
+  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts", "shared/**/*.ts"],
+  "exclude": ["node_modules", "supabase/functions", "admin-web", "dist"]
 }

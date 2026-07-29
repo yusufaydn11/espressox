@@ -6,7 +6,6 @@ import { useToast } from '../lib/toast';
 import type { Store, Franchise } from '../lib/supabase';
 
 export function StoresScreen() {
-  const { success, error: toastError } = useToast();
   const [items, setItems] = useState<Store[] | null>(null);
   const [franchises, setFranchises] = useState<Franchise[]>([]);
   const [loading, setLoading] = useState(true);

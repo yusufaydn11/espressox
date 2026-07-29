@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { B2BService } from './base';
+import { buildB2BInvoicePdfUrl, buildB2BPaymentEdgeUrl } from '@shared/utils/payments';
 import type { B2BPayment, B2BLedgerEntry, B2BInvoice, RpcResult } from './types';
 
 interface PaymentResult {
@@ -28,6 +29,28 @@ class PaymentService extends B2BService<B2BPayment> {
     return (data ?? []) as B2BPayment[];
   }
 
+  async getForOrder(orderId: string): Promise<B2BPayment | null> {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data as B2BPayment | null;
+  }
+
+  async getAllForOrder(orderId: string): Promise<B2BPayment[]> {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as B2BPayment[];
+  }
+
   async record(orderId: string, provider: string, amount: number, method: string): Promise<RpcResult> {
     return this.rpc<RpcResult>('record_b2b_payment', {
       p_order_id: orderId,
@@ -48,7 +71,17 @@ class PaymentService extends B2BService<B2BPayment> {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Oturum açmanız gerekli');
 
-      const fnUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/b2b-payment`;
+      if (provider === 'manual' || provider === 'bank_transfer') {
+        const result = await this.record(orderId, provider, 0, method);
+        if (result.error) return { success: false, error: result.error };
+        return {
+          success: true,
+          payment_id: result.payment_id as string | undefined,
+          invoice_id: result.invoice_id as string | undefined,
+        };
+      }
+
+      const fnUrl = buildB2BPaymentEdgeUrl(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '');
       const res = await fetch(fnUrl, {
         method: 'POST',
         headers: {
@@ -95,6 +128,16 @@ class InvoiceService extends B2BService<B2BInvoice> {
     super('b2b_invoices');
   }
 
+  async getForOrder(orderId: string): Promise<B2BInvoice | null> {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data as B2BInvoice | null;
+  }
+
   async getRecent(limit = 100): Promise<B2BInvoice[]> {
     const { data, error } = await supabase
       .from(this.tableName)
@@ -105,10 +148,27 @@ class InvoiceService extends B2BService<B2BInvoice> {
     return (data ?? []) as B2BInvoice[];
   }
 
-  // ── Generate invoice PDF URL (edge function) ──
-  getInvoicePdfUrl(invoiceId: string): string {
-    const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    return `${baseUrl}/functions/v1/b2b-invoice-pdf?id=${invoiceId}`;
+  // ── Generate invoice PDF URL (edge function, session-scoped token) ──
+  async getInvoicePdfUrl(invoiceId: string): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Oturum açmanız gerekli');
+    return buildB2BInvoicePdfUrl(
+      process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+      invoiceId,
+      undefined,
+      session.access_token,
+    );
+  }
+
+  async getOrderPdfUrl(orderId: string): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Oturum açmanız gerekli');
+    return buildB2BInvoicePdfUrl(
+      process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+      orderId,
+      'order',
+      session.access_token,
+    );
   }
 }
 

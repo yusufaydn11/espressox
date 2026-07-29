@@ -1,8 +1,30 @@
 import {
   createContext, useContext, useState, useCallback, useEffect, type ReactNode,
 } from 'react';
-import { supabase, type Profile, type Store, type Product, type Reward, type CampaignRow, type OrderRow, type QrScanRow } from '@/lib/supabase';
-import { TIERS } from '@/data';
+import { supabase, type Profile, type Store, type Product, type Reward, type CampaignRow, type QrScanRow } from '@/lib/supabase';
+import {
+  fetchRecentOrdersForAdmin,
+  fetchOrderStatsRows,
+  updateOrderByNumber,
+  deleteOrderByNumber,
+} from '@/services/orders';
+import { insertBulk } from '@/services/notifications';
+import {
+  fetchAllRewards,
+  fetchQrScansForAdmin,
+  createReward as createRewardService,
+  updateReward as updateRewardService,
+  deleteReward as deleteRewardService,
+} from '@/services/loyalty';
+import {
+  fetchAllProducts,
+  createProduct as createProductService,
+  updateProduct as updateProductService,
+  deleteProduct as deleteProductService,
+} from '@/services/products';
+import { TIERS, VIP_TIER_FILTER } from '@shared/constants/loyalty';
+import { customerStatusFromTier } from '@shared/utils/loyalty';
+import { useAdminToast } from '@/context/AdminToastContext';
 import type { TierInfo, Employee } from '@/types';
 import { EMPLOYEES, CHALLENGES } from '@/data';
 
@@ -80,7 +102,6 @@ interface AdminState {
   deleteOrder: (id: string) => Promise<void>;
   sendPushNotification: (title: string, body: string, segment: string) => Promise<number>;
 
-  toast: string | null;
   showToast: (msg: string) => void;
   loading: boolean;
 }
@@ -88,6 +109,7 @@ interface AdminState {
 const Ctx = createContext<AdminState | null>(null);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
+  const { showToast } = useAdminToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
@@ -99,7 +121,6 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>(EMPLOYEES);
   const [challenges, setChallenges] = useState(CHALLENGES);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<string | null>(null);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -109,11 +130,6 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     { id: 'co2', code: 'MUTLU2', title: 'Mutlu Saat 1+1', type: 'bogo', value: '1+1', redeemed: 3204, limit: 10000, expires: 'Sürekli', status: 'active' },
     { id: 'co3', code: 'DOGUMGUNU-X', title: 'Doğum Günü Ücretsiz İçecek', type: 'gift', value: 'Ücretsiz', redeemed: 412, limit: 1820, expires: 'Aylık', status: 'active' },
   ]);
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2600);
-  }, []);
 
   const logAdminAction = useCallback(async (
     action: string, entityType: string, entityId: string, details: Record<string, unknown>,
@@ -130,27 +146,27 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     const [prodRes, storeRes, campRes, custRes, orderRes, rewRes, scanRes, statsRes] = await Promise.all([
-      supabase.from('products').select('*').order('sort_order'),
+      fetchAllProducts(),
       supabase.from('stores').select('*').order('name'),
       supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('orders').select('*, order_items(id), user_id').order('created_at', { ascending: false }).limit(20),
-      supabase.from('rewards').select('*').order('points_cost'),
-      supabase.from('qr_scans').select('*').order('scanned_at', { ascending: false }).limit(20),
-      supabase.from('orders').select('total, user_id, created_at'),
+      fetchRecentOrdersForAdmin(20),
+      fetchAllRewards(),
+      fetchQrScansForAdmin(20),
+      fetchOrderStatsRows(),
     ]);
 
-    if (prodRes.data) setProducts(prodRes.data as Product[]);
+    if (prodRes.data) setProducts(prodRes.data);
     if (storeRes.data) setStores(storeRes.data as Store[]);
     if (campRes.data) setCampaigns(campRes.data as CampaignRow[]);
-    if (rewRes.data) setRewards(rewRes.data as Reward[]);
-    if (scanRes.data) setQrScans(scanRes.data as QrScanRow[]);
+    if (rewRes.data) setRewards(rewRes.data);
+    if (scanRes.data) setQrScans(scanRes.data);
 
     if (custRes.data) {
       const profiles = custRes.data as Profile[];
       const orderStatsMap = new Map<string, { count: number; spent: number; lastDate: string }>();
       if (statsRes.data) {
-        for (const o of statsRes.data as OrderRow[]) {
+        for (const o of statsRes.data) {
           const cur = orderStatsMap.get(o.user_id) ?? { count: 0, spent: 0, lastDate: '' };
           cur.count += 1;
           cur.spent += Number(o.total);
@@ -170,7 +186,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           orders: stats?.count ?? 0,
           spent: stats?.spent ?? 0,
           lastOrder: stats?.lastDate ? new Date(stats.lastDate).toLocaleDateString('tr-TR') : '',
-          status: p.is_blocked ? 'inactive' as const : (p.tier === 'VIP' || p.tier === 'Siyah' ? 'vip' as const : 'active' as const),
+          status: customerStatusFromTier(p.tier, p.is_blocked),
           segment: p.tier,
           created_at: p.created_at,
           last_sign_in_at: p.last_sign_in_at ?? null,
@@ -188,7 +204,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           profileMap.set(p.user_id, p.full_name || 'İsimsiz Üye');
         }
       }
-      const adminOrders: AdminOrder[] = (orderRes.data as (OrderRow & { order_items: { id: string }[] })[]).map(o => ({
+      const adminOrders: AdminOrder[] = orderRes.data.map(o => ({
         id: o.order_number,
         user_id: o.user_id,
         customer: profileMap.get(o.user_id) ?? 'Misafir',
@@ -215,25 +231,25 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   // Products
   const addProduct = useCallback(async (p: Partial<Product>) => {
-    const { error } = await supabase.from('products').insert(p);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await createProductService(p);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('create_product', 'product', '', { product: p });
     showToast('Ürün eklendi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   const updateProduct = useCallback(async (id: string, patch: Partial<Product>) => {
-    const { error } = await supabase.from('products').update(patch).eq('id', id);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await updateProductService(id, patch);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('update_product', 'product', id, { patch });
     showToast('Ürün güncellendi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   const deleteProduct = useCallback(async (id: string) => {
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await deleteProductService(id);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('delete_product', 'product', id, {});
     showToast('Ürün silindi'); loadAll();
-  }, [showToast, loadAll]);
+  }, [showToast, loadAll, logAdminAction]);
 
   // Stores
   const addStore = useCallback(async (s: Partial<Store>) => {
@@ -274,7 +290,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     if (error) { showToast('Hata: ' + error.message); return; }
     await logAdminAction('delete_campaign', 'campaign', id, {});
     showToast('Kampanya silindi'); loadAll();
-  }, [showToast, loadAll]);
+  }, [showToast, loadAll, logAdminAction]);
 
   // Customers
   const updateCustomer = useCallback(async (id: string, patch: Partial<AdminCustomer>) => {
@@ -304,35 +320,35 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   // Orders
   const updateOrder = useCallback(async (id: string, patch: Partial<AdminOrder>) => {
-    const dbPatch: Record<string, unknown> = {};
+    const dbPatch: { status?: string } = {};
     if (patch.status) dbPatch.status = patch.status;
-    const { error } = await supabase.from('orders').update(dbPatch).eq('order_number', id);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await updateOrderByNumber(id, dbPatch);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('update_order', 'order', id, { patch: dbPatch });
     showToast('Sipariş güncellendi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   // Rewards
   const addReward = useCallback(async (r: Partial<Reward>) => {
-    const { error } = await supabase.from('rewards').insert(r);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await createRewardService(r);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('create_reward', 'reward', '', { reward: r });
     showToast('Ödül eklendi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   const updateReward = useCallback(async (id: string, patch: Partial<Reward>) => {
-    const { error } = await supabase.from('rewards').update(patch).eq('id', id);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await updateRewardService(id, patch);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('update_reward', 'reward', id, { patch });
     showToast('Ödül güncellendi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   const deleteReward = useCallback(async (id: string) => {
-    const { error } = await supabase.from('rewards').delete().eq('id', id);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await deleteRewardService(id);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('delete_reward', 'reward', id, {});
     showToast('Ödül silindi'); loadAll();
-  }, [showToast, loadAll]);
+  }, [showToast, loadAll, logAdminAction]);
 
   // Coupons (local only for now)
   const addCoupon = useCallback((c: Coupon) => {
@@ -382,15 +398,15 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   }, [showToast]);
 
   const deleteOrder = useCallback(async (orderNumber: string) => {
-    const { error } = await supabase.from('orders').delete().eq('order_number', orderNumber);
-    if (error) { showToast('Hata: ' + error.message); return; }
+    const { error } = await deleteOrderByNumber(orderNumber);
+    if (error) { showToast('Hata: ' + error); return; }
     await logAdminAction('delete_order', 'order', orderNumber, {});
     showToast('Sipariş silindi'); loadAll();
   }, [showToast, loadAll, logAdminAction]);
 
   const sendPushNotification = useCallback(async (title: string, body: string, segment: string) => {
     let query = supabase.from('profiles').select('user_id');
-    if (segment === 'vip') query = query.in('tier', ['VIP', 'Siyah', 'Altın']);
+    if (segment === 'vip') query = query.in('tier', [...VIP_TIER_FILTER]);
     else if (segment === 'gold') query = query.eq('tier', 'Altın');
     else if (segment === 'inactive') query = query.eq('is_blocked', false);
     else if (segment === 'birthday') query = query.neq('birthday', '');
@@ -401,11 +417,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       user_id: u.user_id, title, body, type: 'admin',
       data: { deep_link: 'home' },
     }));
-    const { error: insErr } = await supabase.from('notifications').insert(notifs);
-    if (insErr) { showToast('Hata: ' + insErr.message); return 0; }
+    const { error: insErr, count } = await insertBulk(notifs);
+    if (insErr) { showToast('Hata: ' + insErr); return 0; }
     await logAdminAction('send_push', 'notification', segment, { title, body, count: data.length });
-    showToast(`Bildirim ${data.length} kullanıcıya gönderildi`);
-    return data.length;
+    showToast(`Bildirim ${count} kullanıcıya gönderildi`);
+    return count;
   }, [showToast, logAdminAction]);
 
   const value: AdminState = {
@@ -420,7 +436,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     employees, addEmployee, updateEmployee, deleteEmployee,
     challenges, addChallenge, updateChallenge, deleteChallenge,
     qrScans, totalCustomers, totalRevenue, totalOrders,
-    toast, showToast, loading, deleteOrder, sendPushNotification,
+    showToast, loading, deleteOrder, sendPushNotification,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

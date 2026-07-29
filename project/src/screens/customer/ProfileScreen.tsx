@@ -3,7 +3,7 @@ import { View, Text, Pressable, Image } from 'react-native';
 import {
   Heart, Receipt, CreditCard, MapPin, FileText, Crown, Zap,
   Bell, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
-  UserX, Star, Award, Calendar, Sparkles,
+  UserX, Calendar, Sparkles,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';

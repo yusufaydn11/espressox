@@ -159,7 +159,7 @@ Deno.serve(async (req: Request) => {
         details: { email, store_id: storeId, full_name: fullName },
       });
 
-      return json({ ok: true, userId: uid, email, password, storeId, storeName: storeCheck.data.name });
+      return json({ ok: true, userId: uid, email, storeId, storeName: storeCheck.data.name });
     }
 
     if (action === 'update') {

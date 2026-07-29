@@ -1,4 +1,4 @@
-import { View, Text, TextInput, Pressable } from 'react-native';
+import { View, TextInput, Pressable } from 'react-native';
 import { Search, X } from 'lucide-react';
 
 interface B2BSearchBarProps {

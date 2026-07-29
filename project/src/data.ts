@@ -1,5 +1,5 @@
 import type {
-  Product, Store, Reward, Challenge, Badge, TierInfo, Order,
+  Product, Store, Reward, Challenge, Badge, Order,
   Promotion, PaymentMethod, Customer, AdminCustomer, AdminOrder,
   Employee, Campaign, ChartPoint,
 } from '@/types';
@@ -206,13 +206,7 @@ export const STORES: Store[] = [
 ];
 
 // ─── Loyalty ─────────────────────────────────────────────
-export const TIERS: TierInfo[] = [
-  { name: 'Bronz', minPoints: 0, color: '#a87f54', perks: ['Hoş geldin ödülü', 'Doğum günü hediyesi'] },
-  { name: 'Gümüş', minPoints: 1000, color: '#9ca3af', perks: ['Salı günleri 2x puan', 'Ücretsiz boy yükseltme'] },
-  { name: 'Altın', minPoints: 3000, color: '#C8102E', perks: ['Favorilerde 3x puan', 'Aylık ücretsiz içecek', 'Öncelikli teslim'] },
-  { name: 'Siyah', minPoints: 7000, color: '#18181b', perks: ['Concierge sipariş', 'Özel tadım etkinlikleri', '5x puan', 'Ücretsiz teslimat'] },
-  { name: 'VIP', minPoints: 15000, color: '#C8102E', perks: ['Kişisel kahve küratörü', 'Özel kavurum erişimi', 'Sınırsız ücretsiz ekstra', 'Yıllık altın hediye seti'] },
-];
+export { TIERS } from '@shared/constants/loyalty';
 
 export const REWARDS: Reward[] = [
   { id: 'r1', title: 'Herhangi Bir El Yapımı Kahve', description: 'Herhangi bir boyutta kahve veya espresso içeceğinde kullanın.', pointsCost: 150, category: 'coffee', image: img('302899') },

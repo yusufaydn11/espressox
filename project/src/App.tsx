@@ -1,20 +1,23 @@
 import { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import * as Linking from 'expo-linking';
-import { Coffee, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Coffee, CheckCircle2 } from 'lucide-react';
 import { AppProvider, useApp } from '@/context/AppContext';
-import { AdminProvider, useAdmin } from '@/context/AdminContext';
+import { AdminProvider } from '@/context/AdminContext';
+import { AdminToastProvider, useAdminToast } from '@/context/AdminToastContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { CustomerApp } from '@/screens/customer/CustomerApp';
 import { AdminApp } from '@/screens/admin/AdminApp';
 import { FranchiseApp } from '@/screens/admin/FranchiseApp';
 import { AuthScreen } from '@/screens/auth/AuthScreen';
 import { Toast } from '@/components/ui/Toast';
+import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
+import { supabase } from '@/lib/supabase';
 import { usePushNotifications } from '@/lib/notifications';
 
 function AdminToast() {
-  const { toast } = useAdmin();
+  const { toast } = useAdminToast();
   if (!toast) return null;
   return (
     <View className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[80]">
@@ -44,63 +47,99 @@ function LoadingScreen() {
 
 function DeepLinkHandler() {
   const { openSheet } = useApp();
-  const { resetPassword } = useAuth();
   const handledRef = useRef(false);
 
   useEffect(() => {
-    const handleUrl = (url: string) => {
+    const handleUrl = async (url: string) => {
       const parsed = Linking.parse(url);
-      if (parsed.hostname === 'reset' || parsed.path === 'reset') {
-        openSheet('account');
+      if (parsed.hostname !== 'reset' && parsed.path !== 'reset') return;
+
+      const hash = url.includes('#') ? url.split('#')[1] : '';
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
       }
+      openSheet('reset-password');
     };
 
     Linking.getInitialURL().then((url) => {
       if (url && !handledRef.current) {
         handledRef.current = true;
-        handleUrl(url);
+        void handleUrl(url);
       }
     });
 
     const sub = Linking.addEventListener('url', ({ url }) => {
-      handleUrl(url);
+      void handleUrl(url);
     });
 
     return () => sub.remove();
-  }, [openSheet, resetPassword]);
+  }, [openSheet]);
 
   return null;
 }
 
+function PasswordResetOverlay() {
+  return <PasswordResetSheet />;
+}
+
 function Shell() {
-  const { role, setRole } = useApp();
-  const { user, loading, isAdmin, isFranchise, isStoreManager, isStaff, isInternal } = useAuth();
+  const { user, loading, isAdmin, isFranchise, isStoreManager, isStaff, profile } = useAuth();
 
   usePushNotifications();
 
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthScreen />;
 
-  // Franchise, store_manager, and staff all see the FranchiseApp (store panel)
-  // Franchise users get B2B supply features; store_manager gets operational features; staff gets limited views
-  if (isFranchise || isStoreManager || isStaff) {
+  if (profile?.is_blocked) {
     return (
-      <AdminProvider>
-        <FranchiseApp />
-        <AdminToast />
-      </AdminProvider>
+      <View className="flex-1 bg-cream-50 items-center justify-center p-6">
+        <Text className="text-xl font-bold text-ink-900 text-center">Hesap Engellendi</Text>
+        <Text className="text-sm text-ink-500 mt-2 text-center">Hesabınız askıya alınmıştır. Destek ekibiyle iletişime geçin.</Text>
+      </View>
     );
   }
 
-  const showAdmin = role === 'admin' && isAdmin;
+  if (isFranchise || isStoreManager || isStaff) {
+    return (
+      <AdminToastProvider>
+        <AdminProvider>
+          <DeepLinkHandler />
+          <FranchiseApp />
+          <AdminToast />
+          <PasswordResetOverlay />
+        </AdminProvider>
+      </AdminToastProvider>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <AdminToastProvider>
+        <AdminProvider>
+          <DeepLinkHandler />
+          <AdminApp />
+          <AdminToast />
+          <PasswordResetOverlay />
+        </AdminProvider>
+      </AdminToastProvider>
+    );
+  }
 
   return (
-    <AdminProvider>
-      {showAdmin ? <AdminApp /> : <CustomerApp />}
+    <AdminToastProvider>
+      <CustomerApp />
       <DeepLinkHandler />
       <Toast />
       <AdminToast />
-    </AdminProvider>
+    </AdminToastProvider>
   );
 }
 

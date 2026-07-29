@@ -3,7 +3,6 @@ import { Plus, Edit2, Trash2, Crown, Zap, Save } from 'lucide-react';
 import { fetchRewards, createReward, updateReward, deleteReward, fetchLoyaltySettings, updateLoyaltySettings } from '../lib/api';
 import { Card, Spinner, ErrorState, EmptyState, Badge, Button, PageHeader, Modal, ConfirmDialog } from '../lib/ui';
 import { useToast } from '../lib/toast';
-import { formatTRY } from '../lib/utils';
 import type { Reward, LoyaltySettings } from '../lib/supabase';
 
 export function LoyaltyScreen() {

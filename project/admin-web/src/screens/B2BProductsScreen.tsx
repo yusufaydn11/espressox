@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Plus, Edit2, Trash2, Eye, EyeOff, PackageOpen, RefreshCw, Boxes,
-  Tag, TrendingDown, X,
+  Tag, TrendingDown,
 } from 'lucide-react';
 import {
   fetchB2BProducts, createB2BProduct, updateB2BProduct, deleteB2BProduct,

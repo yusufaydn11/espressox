@@ -20,7 +20,7 @@ export {
   B2B_ORDER_STATUS_LABELS, B2B_INVOICE_STATUS_LABELS,
   B2B_PAYMENT_STATUS_LABELS, B2B_RISK_LABELS,
   B2B_ORDER_STATUS_TONES, B2B_INVOICE_STATUS_TONES,
-  B2B_PAYMENT_STATUS_TONES, B2B_RISK_TONES,
+  B2B_PAYMENT_STATUS_TONES, B2B_RISK_TONES, B2B_TIMELINE_LABELS,
   getEffectivePrice, hasActiveCampaign,
 } from './base';
 
@@ -28,6 +28,6 @@ export {
 export { productService } from './productService';
 export { orderService } from './orderService';
 export { paymentService, ledgerService, invoiceService } from './paymentService';
-export { dashboardService, accountService, creditService } from './accountService';
-export { templateService, notificationService, warehouseService } from './templateService';
+export { dashboardService, accountService } from './accountService';
+export { templateService, notificationService } from './templateService';
 export { cartService } from './cartService';

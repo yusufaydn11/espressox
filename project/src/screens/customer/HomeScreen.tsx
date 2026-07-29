@@ -5,6 +5,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useStores, useProducts } from '@/lib/hooks';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import { TIERS } from '@shared/constants/loyalty';
+import { formatPoints } from '@shared/utils/loyalty';
+import { mapRetailDbProductsToUi, filterRetailPopularProducts } from '@shared/utils/products';
+import type { RetailProductDbRow } from '@shared/types/products';
 import type { Product } from '@/types';
 
 export function HomeScreen() {
@@ -24,18 +28,12 @@ export function HomeScreen() {
   const nearestStore = stores?.[0];
   const tier = profile?.tier ?? 'Bronz';
 
-  const products: Product[] = (dbProducts ?? []).slice(0, 6).map(p => ({
-    id: p.id, name: p.name, category: p.category, description: p.description,
-    price: Number(p.price), image: p.image, rating: Number(p.rating),
-    popular: p.popular, seasonal: p.seasonal, aiRecommended: p.ai_recommended,
-    calories: p.calories, allergens: p.allergens, sizes: p.sizes, milks: p.milks,
-    syrups: p.syrups, toppings: p.toppings, temperature: p.temperature,
-    iceLevels: p.ice_levels, nutrition: p.nutrition,
-  }));
+  const products = mapRetailDbProductsToUi((dbProducts ?? []).slice(0, 6) as RetailProductDbRow[]);
 
-  const popular = products.filter(p => p.popular).slice(0, 4);
+  const popular = filterRetailPopularProducts(products).slice(0, 4);
   const favProducts = products.filter(p => favorites.includes(p.id));
-  const tierProgress = Math.min(100, (points / 7000) * 100);
+  const siyahMin = TIERS.find(t => t.name === 'Siyah')?.minPoints ?? 7000;
+  const tierProgress = Math.min(100, (points / siyahMin) * 100);
 
   return (
     <View className="mx-auto max-w-md pb-32 w-full">
@@ -58,7 +56,7 @@ export function HomeScreen() {
                   <Text className="text-[11px] font-bold text-ex-red uppercase tracking-widest">{tier} Üye</Text>
                 </View>
                 <Text className="text-[34px] font-bold text-ink-900 mt-2 font-display leading-none">
-                  {points.toLocaleString('tr-TR')}
+                  {formatPoints(points)}
                   <Text className="text-base font-normal text-ink-400 font-sans"> puan</Text>
                 </Text>
               </View>
@@ -72,7 +70,7 @@ export function HomeScreen() {
             <View className="mt-5">
               <View className="flex-row items-center justify-between mb-2">
                 <Text className="text-[11px] text-ink-400 font-medium">Siyah seviyeye</Text>
-                <Text className="text-[11px] font-bold text-ex-red">{(7000 - points).toLocaleString('tr-TR')} puan</Text>
+                <Text className="text-[11px] font-bold text-ex-red">{formatPoints(siyahMin - points)} puan</Text>
               </View>
               <View className="h-2 rounded-full bg-ink-100 overflow-hidden">
                 <View className="h-full rounded-full bg-red-gradient" style={{ width: `${tierProgress}%` }} />

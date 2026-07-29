@@ -10,9 +10,9 @@ import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { STAMP_CARD_SIZE } from '@shared/constants/loyalty';
+import { computeStampProgress, formatPoints } from '@shared/utils/loyalty';
 import { cn } from '@/lib/utils';
-
-const STAMP_CARD_SIZE = 5;
 
 export function QrScreen() {
   const { profile } = useAuth();
@@ -24,8 +24,9 @@ export function QrScreen() {
   const points = profile?.points ?? 0;
   const tier = profile?.tier ?? 'Bronz';
   const stampsActive = stamps?.filter(s => !s.redeemed) ?? [];
-  const freeCoffees = Math.floor(stampsActive.length / STAMP_CARD_SIZE);
-  const currentStamps = stampsActive.length % STAMP_CARD_SIZE;
+  const stampProgress = computeStampProgress(stampsActive.length, STAMP_CARD_SIZE);
+  const freeCoffees = stampProgress.freeCoffees;
+  const currentStamps = stampProgress.currentStamps;
 
   return (
     <View className="mx-auto max-w-md px-5 pt-4 pb-32 w-full">
@@ -59,7 +60,7 @@ export function QrScreen() {
         </Card>
         <Card className="flex-1 p-4 items-center">
           <Gift size={18} color="#C8102E" />
-          <Text className="text-base font-bold text-ink-900 leading-none mt-1.5">{points.toLocaleString('tr-TR')}</Text>
+          <Text className="text-base font-bold text-ink-900 leading-none mt-1.5">{formatPoints(points)}</Text>
           <Text className="text-[10px] text-ink-400 mt-1">Puan</Text>
         </Card>
         <Card className="flex-1 p-4 items-center">
@@ -116,7 +117,7 @@ export function QrScreen() {
                 <QrSvg value={qrCode.code} size={224} />
               </View>
               <Text className="text-lg font-bold text-ink-900 mt-5">{profile?.full_name}</Text>
-              <Text className="text-sm text-ex-red mt-0.5">{tier} Üye · {points.toLocaleString('tr-TR')} puan</Text>
+              <Text className="text-sm text-ex-red mt-0.5">{tier} Üye · {formatPoints(points)} puan</Text>
               <Text className="text-xs text-ink-400 mt-1">{qrCode.code}</Text>
               <View className="mt-4 p-3.5 rounded-xl bg-cream-100">
                 <Text className="text-[11px] text-ink-500 text-center">

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, Pressable, Image, TextInput as RNTextInput, ScrollView } from 'react-native';
+import { View, Text, Pressable, Image, TextInput as RNTextInput } from 'react-native';
 import { Heart, Star, Minus, Plus, Check, Info, Flame } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';

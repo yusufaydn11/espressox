@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { UserX, Download, AlertTriangle, CheckCircle2, Shield } from 'lucide-react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';

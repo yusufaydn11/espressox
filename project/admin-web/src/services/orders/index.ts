@@ -1,0 +1,26 @@
+export {
+  fetchOrders,
+  updateOrderStatus,
+  fetchCustomerOrders,
+  fetchOrderTotalsSince,
+  fetchOrderTotalsInRange,
+  fetchAllOrderTotals,
+  fetchSalesSeriesRows,
+  fetchStoreComparisonRows,
+  fetchOrderTrendRows,
+  fetchHourlyOrderTimestamps,
+  fetchOrderStatusRows,
+  fetchTopProductItems,
+  fetchCategoryRevenueItems,
+  fetchDashboardKpisAggregate,
+  fetchSalesSeriesAggregate,
+  fetchStoreComparisonAggregate,
+  fetchTopProductsAggregate,
+  fetchRecentOrdersAggregate,
+  fetchOrderTrendAggregate,
+  fetchCategoryRevenueAggregate,
+  fetchHourlyOrdersAggregate,
+  fetchOrderStatusBreakdownAggregate,
+} from './orderService';
+
+export type { OrderWithItems, DashboardRecentOrderRow } from './orderService';

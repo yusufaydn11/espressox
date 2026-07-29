@@ -5,7 +5,6 @@ import { useApp } from '@/context/AppContext';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { PROMOTIONS } from '@/data';
-import { cn } from '@/lib/utils';
 
 const typeIcons: Record<string, typeof Tag> = {
   'happy-hour': Clock, birthday: Gift, location: MapPin, referral: Users, gift: Gift, wallet: Wallet, campaign: Tag,

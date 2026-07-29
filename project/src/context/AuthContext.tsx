@@ -23,6 +23,7 @@ type AuthState = {
   signInWithApple: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: string | null }>;
   deleteAccount: () => Promise<{ error: string | null }>;
@@ -155,6 +156,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { error: translateError(error.message) };
+    return { error: null };
+  }, []);
+
   const refreshProfile = useCallback(async () => {
     if (user) await loadProfile(user.id);
   }, [user, loadProfile]);
@@ -222,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthState = {
     user, session, profile, loading, isAdmin, isFranchise, isStoreManager, isStaff, isInternal, storeId, role, franchiseId: franchiseIdState,
     signUp, signIn, signInWithGoogle, signInWithApple,
-    signOut, resetPassword, refreshProfile, updateProfile, deleteAccount,
+    signOut, resetPassword, updatePassword, refreshProfile, updateProfile, deleteAccount,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -245,14 +252,4 @@ function translateError(msg: string): string {
     'User is blocked': 'Hesabınız engellenmiştir. Lütfen destekle iletişime geçin.',
   };
   return map[msg] ?? msg;
-}
-
-function translateOAuthError(msg: string, provider: string): string {
-  if (/provider.*not.*enabled|oauth.*not.*configured|provider_not_supported/i.test(msg)) {
-    return `${provider} ile giriş henüz aktif edilmemiş. Lütfen e-posta ile kayıt olun veya giriş yapın.`;
-  }
-  if (/redirect|origin|url/i.test(msg)) {
-    return `${provider} giriş yönlendirmesi başarısız. Lütfen e-posta ile deneyin.`;
-  }
-  return translateError(msg);
 }

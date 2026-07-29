@@ -15,7 +15,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export type AdminRole = 'super_admin' | 'franchise' | 'store_manager' | 'staff';
+export type AdminRole = 'super_admin' | 'admin' | 'franchise' | 'store_manager' | 'staff';
 
 export interface UserProfile {
   id: string;
@@ -295,6 +295,8 @@ export interface B2BOrder {
   vat_total: number;
   total: number;
   notes: string;
+  admin_notes: string;
+  created_by: string | null;
   carrier_company: string;
   tracking_number: string;
   tracking_url: string;
@@ -320,6 +322,7 @@ export interface B2BOrderItem {
   unit_price: number;
   vat_rate: number;
   line_total: number;
+  image_url?: string;
 }
 
 export interface B2BInvoice {

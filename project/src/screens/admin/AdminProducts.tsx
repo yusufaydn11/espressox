@@ -7,6 +7,14 @@ import { Modal, ConfirmDialog, FormField, TextInput, TextArea, Select, Toggle } 
 import { useAdmin, genId } from '@/context/AdminContext';
 import { MENU_CATEGORIES } from '@/data';
 import { formatPrice, cn } from '@/lib/utils';
+import {
+  mapRetailDbProductsToUi,
+  mapRetailUiProductToDb,
+  filterRetailProductsByCategory,
+  filterRetailProductsBySearch,
+} from '@shared/utils/products';
+import { RETAIL_PRODUCT_BADGE_LABELS_ADMIN, RETAIL_SEARCH_PLACEHOLDERS, retailProductImageUrl } from '@shared/constants/products';
+import type { RetailProductDbRow } from '@shared/types/products';
 import type { Product as DbProduct } from '@/lib/supabase';
 import type { Product, ProductOption } from '@/types';
 
@@ -21,7 +29,7 @@ const defaultOpts: ProductOption[] = [
 
 const blankProduct = (): Product => ({
   id: genId('p'), name: '', category: MENU_CATEGORIES[0], description: '', price: 220,
-  image: `https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=800`,
+  image: retailProductImageUrl(),
   rating: 4.5, popular: false, seasonal: false, calories: 0, allergens: [],
   sizes: defaultSizes, milks: defaultOpts, syrups: defaultOpts, toppings: defaultOpts,
   temperature: [{ id: 'hot', label: 'Sıcak', priceModifier: 0 }],
@@ -38,20 +46,12 @@ export function AdminProducts() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [form, setForm] = useState<Product>(blankProduct());
 
-  const dbProducts = products as unknown as DbProduct[];
-  const typedProducts: Product[] = dbProducts.map(p => ({
-    ...p,
-    price: Number(p.price),
-    rating: Number(p.rating),
-    iceLevels: p.ice_levels,
-    aiRecommended: p.ai_recommended,
-  }));
+  const typedProducts = mapRetailDbProductsToUi(products as unknown as RetailProductDbRow[]);
 
-  const filtered = typedProducts.filter(p => {
-    if (cat !== 'Tümü' && p.category !== cat) return false;
-    if (query && !p.name.toLowerCase().includes(query.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = filterRetailProductsBySearch(
+    filterRetailProductsByCategory(typedProducts, cat),
+    query,
+  );
 
   const openCreate = () => { setForm(blankProduct()); setCreating(true); };
   const openEdit = (p: Product) => { setForm({ ...p }); setEditing(p); };
@@ -61,14 +61,7 @@ export function AdminProducts() {
 
   const save = () => {
     if (!form.name.trim()) return;
-    const dbForm: Partial<DbProduct> = {
-      ...form,
-      price: form.price,
-      rating: form.rating,
-      ai_recommended: form.aiRecommended ?? false,
-      ice_levels: form.iceLevels,
-      in_stock: true,
-    };
+    const dbForm = mapRetailUiProductToDb(form) as Partial<DbProduct>;
     if (creating) addProduct(dbForm);
     else if (editing) updateProduct(editing.id, dbForm);
     closeForm();
@@ -79,7 +72,7 @@ export function AdminProducts() {
       <View className="flex-row gap-3 items-center">
         <View className="flex-1 flex-row items-center gap-3 px-4 py-3 rounded-2xl bg-white border border-ink-100">
           <Search size={18} color="#9494A0" />
-          <RNTextInput value={query} onChangeText={setQuery} placeholder="Ürün ara…" placeholderTextColor="#9494A0" className="flex-1 text-sm text-ink-900" />
+          <RNTextInput value={query} onChangeText={setQuery} placeholder={RETAIL_SEARCH_PLACEHOLDERS.admin} placeholderTextColor="#9494A0" className="flex-1 text-sm text-ink-900" />
         </View>
         <Button variant="gold" onPress={openCreate}><Plus size={16} /> Ürün ekle</Button>
       </View>
@@ -111,8 +104,8 @@ export function AdminProducts() {
                   <View className="flex-row items-center justify-between mt-2">
                     <Text className="text-sm font-semibold text-ex-red">{formatPrice(p.price)}</Text>
                     <View className="flex-row gap-1">
-                      {p.popular && <View className="px-1.5 py-0.5 rounded bg-ink-100"><Text className="text-[9px] font-bold text-ink-500">POPÜLER</Text></View>}
-                      {p.seasonal && <View className="px-1.5 py-0.5 rounded bg-red-50"><Text className="text-[9px] font-bold text-ex-red">MEVSİMLİK</Text></View>}
+                      {p.popular && <View className="px-1.5 py-0.5 rounded bg-ink-100"><Text className="text-[9px] font-bold text-ink-500">{RETAIL_PRODUCT_BADGE_LABELS_ADMIN.popular}</Text></View>}
+                      {p.seasonal && <View className="px-1.5 py-0.5 rounded bg-red-50"><Text className="text-[9px] font-bold text-ex-red">{RETAIL_PRODUCT_BADGE_LABELS_ADMIN.seasonal}</Text></View>}
                     </View>
                   </View>
                 </View>

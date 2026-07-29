@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Crown, Mail, Phone, ShoppingBag, Eye } from 'lucide-react';
+import { Crown, Phone, Eye } from 'lucide-react';
 import { fetchCustomers, fetchCustomerOrders } from '../lib/api';
-import { Card, Spinner, ErrorState, EmptyState, Badge, Button, PageHeader, Modal, SearchInput, Pagination } from '../lib/ui';
-import { useToast } from '../lib/toast';
+import { Card, Spinner, ErrorState, EmptyState, Badge, PageHeader, Modal, SearchInput, Pagination } from '../lib/ui';
 import { formatTRY, formatNum, formatDate } from '../lib/utils';
 import type { UserProfile, OrderRow } from '../lib/supabase';
 
@@ -24,7 +23,6 @@ export function CustomersScreen() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<UserProfile | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const { success, error: toastError } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);

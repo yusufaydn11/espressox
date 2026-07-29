@@ -1,8 +1,8 @@
 import { View, Text, Pressable, Image } from 'react-native';
 import { Heart, Plus, Sparkles, Star } from 'lucide-react';
 import type { Product } from '@/types';
+import { RETAIL_PRODUCT_BADGE_LABELS } from '@shared/constants/products';
 import { useApp } from '@/context/AppContext';
-import { cn } from '@/lib/utils';
 
 interface ProductCardProps {
   product: Product;
@@ -29,7 +29,7 @@ export function ProductCard({ product, onClick, variant = 'default' }: ProductCa
           {product.aiRecommended && (
             <View className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/95 flex-row items-center gap-1 shadow-soft">
               <Sparkles size={10} color="#C8102E" />
-              <Text className="text-[10px] font-bold text-ex-red tracking-wide">ÖNERİLEN</Text>
+              <Text className="text-[10px] font-bold text-ex-red tracking-wide">{RETAIL_PRODUCT_BADGE_LABELS.aiRecommended}</Text>
             </View>
           )}
           <Pressable
@@ -64,12 +64,12 @@ export function ProductCard({ product, onClick, variant = 'default' }: ProductCa
         </Pressable>
         {product.popular && (
           <View className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-ex-red shadow-red">
-            <Text className="text-[9px] font-bold uppercase tracking-wider text-white">Popüler</Text>
+            <Text className="text-[9px] font-bold uppercase tracking-wider text-white">{RETAIL_PRODUCT_BADGE_LABELS.popular}</Text>
           </View>
         )}
         {product.seasonal && !product.popular && (
           <View className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-ink-900/80">
-            <Text className="text-[9px] font-bold uppercase tracking-wider text-white">Mevsimlik</Text>
+            <Text className="text-[9px] font-bold uppercase tracking-wider text-white">{RETAIL_PRODUCT_BADGE_LABELS.seasonal}</Text>
           </View>
         )}
       </View>

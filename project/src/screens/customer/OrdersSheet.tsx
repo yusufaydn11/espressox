@@ -7,24 +7,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StateWrapper } from '@/components/ui/States';
 import { formatPrice, cn } from '@/lib/utils';
+import {
+  ORDER_STATUS_LABELS_CUSTOMER,
+  ORDER_STATUS_CHIP_CLASSES,
+} from '@shared/constants/orders';
 
-const statusColors: Record<string, string> = {
-  preparing: 'bg-red-50 text-ex-red',
-  ready: 'bg-green-100 text-green-700',
-  'picked-up': 'bg-ink-100 text-ink-600',
-  delivered: 'bg-ink-100 text-ink-600',
-  scheduled: 'bg-blue-100 text-blue-700',
-  cancelled: 'bg-red-100 text-ex-red',
-};
-
-const statusLabels: Record<string, string> = {
-  preparing: 'Hazırlanıyor',
-  ready: 'Hazır',
-  'picked-up': 'Teslim Alındı',
-  delivered: 'Teslim Edildi',
-  scheduled: 'Planlandı',
-  cancelled: 'İptal Edildi',
-};
+const statusColors = ORDER_STATUS_CHIP_CLASSES;
+const statusLabels = ORDER_STATUS_LABELS_CUSTOMER;
 
 export function OrdersSheet() {
   const { sheet, closeSheet, showToast } = useApp();

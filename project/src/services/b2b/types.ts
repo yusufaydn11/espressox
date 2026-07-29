@@ -76,6 +76,7 @@ export interface B2BOrder {
   paid_at: string | null;
   confirmed_at: string | null;
   cancel_reason: string;
+  admin_notes: string;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +92,7 @@ export interface B2BOrderItem {
   unit_price: number;
   vat_rate: number;
   line_total: number;
+  image_url?: string;
 }
 
 export interface B2BInvoice {

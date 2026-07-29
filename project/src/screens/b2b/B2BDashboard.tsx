@@ -7,6 +7,7 @@ import {
   b2bFormatTRY, b2bTimeAgo,
   type B2BDashboardData,
 } from '@/services/b2b';
+import { getBalanceLabel } from '@shared/utils/payments';
 import { B2BScreenWrapper, B2BSectionTitle, B2BStatTile, B2BLoadingSpinner, B2BErrorState } from '@/components/b2b';
 
 export function B2BDashboard({ storeId, storeName }: { storeId: string; storeName: string }) {
@@ -39,7 +40,7 @@ export function B2BDashboard({ storeId, storeName }: { storeId: string; storeNam
       <B2BSectionTitle title="Tedarik Dashboard" subtitle={`${storeName} — B2B tedarik özeti`} />
 
       <View className="flex-row flex-wrap gap-3 mb-5">
-        <B2BStatTile label="Cari Bakiye" value={b2bFormatTRY(data.balance)} icon={<Wallet size={16} color={data.balance > 0 ? '#C8102E' : '#16a34a'} />} accent={data.balance > 0 ? 'bg-ex-red/10' : 'bg-green-50'} sub={data.balance > 0 ? 'Borçlu' : data.balance < 0 ? 'Alacaklı' : 'Kapalı'} />
+        <B2BStatTile label="Cari Bakiye" value={b2bFormatTRY(data.balance)} icon={<Wallet size={16} color={data.balance > 0 ? '#C8102E' : '#16a34a'} />} accent={data.balance > 0 ? 'bg-ex-red/10' : 'bg-green-50'} sub={getBalanceLabel(data.balance)} />
         <B2BStatTile label="Açık Faturalar" value={b2bFormatTRY(data.open_invoice_total)} icon={<Receipt size={16} color="#d97706" />} accent="bg-amber-50" />
         <B2BStatTile label="Son Ödeme" value={data.last_payment ? b2bFormatTRY(data.last_payment.amount) : '—'} icon={<TrendingUp size={16} color="#2563eb" />} accent="bg-blue-50" sub={data.last_payment ? b2bTimeAgo(data.last_payment.paid_at) : 'Yok'} />
         <B2BStatTile label="Son Sipariş" value={data.last_order ? data.last_order.order_number : '—'} icon={<Clock size={16} color="#6E6E78" />} accent="bg-ink-50" sub={data.last_order ? b2bTimeAgo(data.last_order.created_at) : 'Yok'} />

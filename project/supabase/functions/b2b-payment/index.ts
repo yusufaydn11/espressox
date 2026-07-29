@@ -3,23 +3,62 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Client-Info, Apikey, X-Webhook-Signature",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const webhookSecret = Deno.env.get("B2B_PAYMENT_WEBHOOK_SECRET") ?? "";
 
-async function callRpc(fn: string, params: Record<string, unknown>) {
+async function callRpc(
+  fn: string,
+  params: Record<string, unknown>,
+  authHeader?: string | null,
+) {
+  const useUserAuth = Boolean(authHeader?.startsWith("Bearer "));
   const res = await fetch(`${supabaseUrl}/rest/v1/rpc/${fn}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": serviceRoleKey,
-      "Authorization": `Bearer ${serviceRoleKey}`,
+      "apikey": useUserAuth ? anonKey : serviceRoleKey,
+      "Authorization": useUserAuth ? authHeader! : `Bearer ${serviceRoleKey}`,
     },
     body: JSON.stringify(params),
   });
   return await res.json();
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) {
+    out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return out === 0;
+}
+
+async function verifyWebhookSignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const expected = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const normalized = signature.replace(/^sha256=/i, "").toLowerCase();
+  return timingSafeEqual(expected, normalized);
+}
+
+function requireAuthHeader(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  return authHeader;
 }
 
 Deno.serve(async (req: Request) => {
@@ -28,13 +67,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { action, order_id, provider, amount, payment_ref, method } = await req.json();
+    const rawBody = await req.text();
+    let payload: Record<string, unknown>;
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      return new Response(JSON.stringify({ error: "invalid_json" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const action = String(payload.action ?? "");
 
     if (action === "initiate") {
-      // ── Initiate payment for a B2B order ──
-      // Currently supports 'manual' (bank transfer) and 'iyzico' / 'odeal' (architecture-ready)
-      // For manual/bank transfer: record payment immediately as success
-      // For iyzico/Ödeal: would redirect to payment gateway (not yet implemented — returns pending)
+      const order_id = payload.order_id as string | undefined;
+      const provider = (payload.provider as string | undefined) ?? "manual";
+      const amount = payload.amount as number | undefined;
+      const payment_ref = (payload.payment_ref as string | undefined) ?? "";
+      const method = (payload.method as string | undefined) ?? "bank_transfer";
 
       if (!order_id) {
         return new Response(JSON.stringify({ error: "order_id required" }), {
@@ -43,18 +94,25 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const prov = provider ?? "manual";
-      const payMethod = method ?? "bank_transfer";
+      const prov = provider;
+      const payMethod = method;
 
       if (prov === "manual" || prov === "bank_transfer") {
-        // Manual payment: record immediately
+        const authHeader = requireAuthHeader(req);
+        if (!authHeader) {
+          return new Response(JSON.stringify({ error: "unauthenticated" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const result = await callRpc("record_b2b_payment", {
           p_order_id: order_id,
           p_provider: prov,
           p_amount: amount ?? 0,
-          p_provider_ref: payment_ref ?? "",
+          p_provider_ref: payment_ref,
           p_method: payMethod,
-        });
+        }, authHeader);
 
         if (result.error) {
           return new Response(JSON.stringify({ error: result.error }), {
@@ -74,17 +132,14 @@ Deno.serve(async (req: Request) => {
       }
 
       if (prov === "iyzico" || prov === "odeal") {
-        // ── Payment gateway integration point ──
-        // When iyzico/Ödeal API keys are configured, this is where the
-        // payment form / 3D secure redirect would be generated.
-        // For now, create a pending payment and return a placeholder.
-        //
-        // Future implementation:
-        //   1. Call iyzico/Ödeal API to create payment request
-        //   2. Return payment_page_url or 3D secure HTML
-        //   3. Webhook endpoint (separate edge function) confirms payment
-        //
-        // Create pending payment record
+        const authHeader = requireAuthHeader(req);
+        if (!authHeader) {
+          return new Response(JSON.stringify({ error: "unauthenticated" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         const payNo = "PAY-" + Date.now().toString().slice(-6);
         const res = await fetch(`${supabaseUrl}/rest/v1/b2b_payments`, {
           method: "POST",
@@ -123,16 +178,31 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "webhook") {
-      // ── Webhook handler for payment gateway callbacks ──
-      // When iyzico/Ödeal sends a payment confirmation webhook,
-      // this verifies the payment and calls confirm_b2b_payment.
-      //
-      // Future implementation:
-      //   1. Verify webhook signature
-      //   2. Extract payment_id and status
-      //   3. If successful, call confirm_b2b_payment
+      if (!webhookSecret) {
+        return new Response(JSON.stringify({ error: "webhook_not_configured" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-      const { payment_id, status } = await req.json();
+      const signature = req.headers.get("X-Webhook-Signature");
+      if (!signature) {
+        return new Response(JSON.stringify({ error: "missing_signature" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const valid = await verifyWebhookSignature(rawBody, signature, webhookSecret);
+      if (!valid) {
+        return new Response(JSON.stringify({ error: "invalid_signature" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const payment_id = payload.payment_id as string | undefined;
+      const status = payload.status as string | undefined;
 
       if (status === "success" && payment_id) {
         const result = await callRpc("confirm_b2b_payment", { p_payment_id: payment_id });
@@ -152,7 +222,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

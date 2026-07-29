@@ -2,7 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Constants from 'expo-constants';
-import { supabase } from '@/lib/supabase';
+import { resolvePushNotificationOrderId } from '@shared/constants/notifications';
+import { saveExpoPushToken } from '@/services/notifications';
 import { useAuth } from '@/context/AuthContext';
 
 Notifications.setNotificationHandler({
@@ -13,9 +14,23 @@ Notifications.setNotificationHandler({
   }),
 });
 
+type B2BOrderTapHandler = (orderId: string) => void;
+
+let b2bOrderTapHandler: B2BOrderTapHandler | null = null;
+
+export function setB2BOrderTapHandler(handler: B2BOrderTapHandler | null): void {
+  b2bOrderTapHandler = handler;
+}
+
+function handleNotificationData(data: Record<string, unknown> | undefined): void {
+  const orderId = resolvePushNotificationOrderId(data);
+  if (orderId) b2bOrderTapHandler?.(orderId);
+}
+
 export function usePushNotifications() {
   const { user } = useAuth();
   const tokenRef = useRef<string | null>(null);
+  const handledColdStartRef = useRef(false);
 
   const register = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -40,10 +55,7 @@ export function usePushNotifications() {
     tokenRef.current = token;
 
     if (user) {
-      await supabase
-        .from('profiles')
-        .update({ expo_push_token: token })
-        .eq('user_id', user.id);
+      await saveExpoPushToken(user.id, token);
     }
 
     if (Platform.OS === 'android') {
@@ -61,6 +73,24 @@ export function usePushNotifications() {
       void register();
     }
   }, [user, register]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleNotificationData(response.notification.request.content.data as Record<string, unknown> | undefined);
+    });
+
+    if (!handledColdStartRef.current) {
+      handledColdStartRef.current = true;
+      void Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (!response) return;
+        handleNotificationData(response.notification.request.content.data as Record<string, unknown> | undefined);
+      });
+    }
+
+    return () => sub.remove();
+  }, []);
 
   return { token: tokenRef.current, register };
 }
