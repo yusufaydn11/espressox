@@ -15,6 +15,6 @@
     "typeRoots": ["./node_modules/@types"],
     "types": ["nativewind/types"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts", "shared/**/*.ts"],
-  "exclude": ["node_modules", "supabase/functions", "admin-web", "dist"]
+  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts", "shared/**/*.ts", "shared/**/*.d.ts"],
+  "exclude": ["node_modules", "supabase/functions", "admin-web", "dist", "tailwind.config.ts"]
 }
