@@ -48,6 +48,7 @@ async function main() {
   audit('Migration', 'Legacy create_order drop', existsSync(resolve(migDir, '20260729270100_drop_legacy_create_order.sql.sql')) ? 'PASS' : 'FAIL');
   audit('Migration', 'order_status_history RLS', existsSync(resolve(migDir, '20260729270200_order_status_history_rls.sql.sql')) ? 'PASS' : 'FAIL');
   audit('Migration', 'SECURITY DEFINER hardening', existsSync(resolve(migDir, '20260729270300_production_definer_and_rls.sql.sql')) ? 'PASS' : 'FAIL');
+  audit('Migration', 'Payment security hardening', existsSync(resolve(migDir, '20260729270400_payment_security_hardening.sql.sql')) ? 'PASS' : 'FAIL');
   audit('Migration', 'Chronological order', migrations.every((f, i) => i === 0 || migrations[i - 1] <= f) ? 'PASS' : 'FAIL');
 
   // ─── Frontend artifacts ───
@@ -96,7 +97,8 @@ async function main() {
     ['advance_order_status', { p_order_number: 'EX-NONE', p_new_status: 'ready', p_note: null }],
     ['rotate_qr_code', {}],
     ['get_hq_benefit_costs', { p_days: 7 }],
-    ['record_order_payment', { p_order_number: 'EX-NONE', p_payment_status: 'paid' }],
+    ['confirm_cash_payment', { p_order_number: 'EX-NONE', p_note: null }],
+    ['confirm_order_payment_webhook', { p_order_number: 'EX-NONE', p_amount: 0 }],
   ];
 
   for (const [name, args] of rpcChecks) {
@@ -115,13 +117,30 @@ async function main() {
   const { error: colErr } = await sb.from('orders').select('billing_type, benefit_title, payment_status, discount_amount').limit(1);
   audit('Schema', 'orders V3 columns', colErr ? 'FAIL' : 'PASS', colErr?.message ?? 'ok');
 
-  // Payment internal gateway
-  audit('Payment', 'record_order_payment RPC', rpcChecks.some(([n]) => n === 'record_order_payment') ? 'PASS' : 'FAIL', 'internal gateway ready');
+  // Payment security (FAZ 0)
+  const { error: recordPayErr } = await sb.rpc('record_order_payment', {
+    p_order_number: 'EX-NONE', p_payment_status: 'paid',
+  });
+  const recordPayBlocked = recordPayErr?.message?.toLowerCase().includes('permission denied')
+    || recordPayErr?.code === '42501';
+  audit('Payment', 'record_order_payment client revoked', recordPayBlocked ? 'PASS' : 'FAIL', recordPayErr?.message ?? 'still callable');
+
+  const { error: webhookClientErr } = await sb.rpc('confirm_order_payment_webhook', {
+    p_order_number: 'EX-NONE', p_amount: 0,
+  });
+  const webhookBlocked = webhookClientErr?.message?.toLowerCase().includes('permission denied')
+    || webhookClientErr?.code === '42501'
+    || webhookClientErr?.message?.includes('Could not find');
+  audit('Payment', 'confirm_order_payment_webhook client blocked', webhookBlocked ? 'PASS' : 'FAIL', webhookClientErr?.message ?? 'still callable');
+
+  audit('Payment', 'confirm_cash_payment staff RPC', rpcChecks.some(([n]) => n === 'confirm_cash_payment') ? 'PASS' : 'FAIL', 'staff cash flow');
 
   // Security
   audit('Security', 'Price tampering (smoke)', 'PASS', 'server-side validation');
   audit('Security', 'add_points revoked', 'PASS', 'migration C-03');
   audit('Security', 'create_order SECURITY DEFINER', fileIncludes('supabase/migrations/20260729270300_production_definer_and_rls.sql.sql', 'SECURITY DEFINER') ? 'PASS' : 'FAIL');
+  audit('Security', 'Payment pending hardening migration', fileIncludes('supabase/migrations/20260729270400_payment_security_hardening.sql.sql', 'payment_pending') ? 'PASS' : 'FAIL');
+  audit('Security', 'confirm_order_payment_webhook no client grant', fileIncludes('supabase/migrations/20260729270400_payment_security_hardening.sql.sql', 'REVOKE EXECUTE ON FUNCTION public.confirm_order_payment_webhook') ? 'PASS' : 'FAIL');
 
   // RLS policies exist (indirect: customer can read own order history after order)
   audit('RLS', 'order_status_history policies', existsSync(resolve(migDir, '20260729270200_order_status_history_rls.sql.sql')) ? 'PASS' : 'FAIL');

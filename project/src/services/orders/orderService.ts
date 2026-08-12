@@ -33,6 +33,7 @@ export type CreateOrderResult = {
   billingType?: string;
   benefitTitle?: string | null;
   paymentStatus?: string;
+  orderStatus?: string;
 };
 
 export async function fetchOrdersByUserId(
@@ -88,6 +89,7 @@ export async function createOrder(params: CreateOrderParams): Promise<CreateOrde
     billing_type?: string;
     benefit_title?: string | null;
     payment_status?: string;
+    status?: string;
   };
   if (result.error) return { error: result.error };
 
@@ -101,6 +103,7 @@ export async function createOrder(params: CreateOrderParams): Promise<CreateOrde
     billingType: result.billing_type,
     benefitTitle: result.benefit_title,
     paymentStatus: result.payment_status,
+    orderStatus: result.status,
   };
 }
 

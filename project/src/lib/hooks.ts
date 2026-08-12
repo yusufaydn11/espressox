@@ -186,6 +186,7 @@ export function useCreateOrder() {
       billingType: result.billingType,
       benefitTitle: result.benefitTitle,
       paymentStatus: result.paymentStatus,
+      orderStatus: result.orderStatus,
     };
   }, [user, refreshProfile]);
 }

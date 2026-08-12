@@ -21,6 +21,8 @@ export type LastOrder = {
   total?: number;
   billingType?: string;
   benefitTitle?: string | null;
+  paymentPending?: boolean;
+  paymentMethod?: string;
 };
 
 interface AppState {

@@ -27,7 +27,7 @@
   these helpers after the campaigns policy split.
 
 ### Trigger functions (revoke from anon AND authenticated)
-- handle_new_user, handle_user_login, create_stamp_card_on_redeem
+- handle_new_user, create_stamp_card_on_redeem
 - These are fired by triggers, not called directly by any client.
 - Only the postgres/service_role owner needs EXECUTE.
 
@@ -80,7 +80,6 @@ GRANT EXECUTE ON FUNCTION public.user_roles_store_match(uuid, text) TO authentic
 -- (only the database engine fires these via triggers)
 -- ============================================================
 REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, authenticated, PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.handle_user_login() FROM anon, authenticated, PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.create_stamp_card_on_redeem() FROM anon, authenticated, PUBLIC;
 
 -- ============================================================

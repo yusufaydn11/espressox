@@ -174,7 +174,7 @@ export function CheckoutSheet() {
       return;
     }
     setPlacing(true);
-    const { error, orderNumber, pointsEarned, total, billingType, benefitTitle } = await createOrder({
+    const { error, orderNumber, pointsEarned, total, billingType, benefitTitle, paymentStatus, orderStatus } = await createOrder({
       items: orderItems,
       total: cartTotal,
       storeId: selectedStore.id,
@@ -187,17 +187,27 @@ export function CheckoutSheet() {
     });
     setPlacing(false);
     if (error) { showToast('Sipariş başarısız: ' + formatOrderError(error)); return; }
+    const resolvedStatus = orderStatus ?? 'payment_pending';
+    const isPendingPayment = paymentStatus === 'pending' || resolvedStatus === 'payment_pending';
     setLastOrder({
       orderNumber: orderNumber ?? '—',
       storeName: selectedStore.name,
-      status: payment === 'cash' ? 'payment_pending' : 'confirmed',
+      status: resolvedStatus,
       pointsEarned: pointsEarned ?? 0,
       total: total ?? displayTotal,
       billingType,
       benefitTitle,
+      paymentPending: isPendingPayment,
+      paymentMethod: payment,
     });
     clearCart();
-    showToast('Sipariş alındı! Puan kazanıyorsun…');
+    if (isPendingPayment && payment !== 'cash') {
+      showToast('Sipariş oluşturuldu. Ödeme sağlayıcısı henüz yapılandırılmadı — ödeme onayı bekleniyor.');
+    } else if (isPendingPayment) {
+      showToast('Sipariş oluşturuldu. Mağazada ödeme yapabilirsiniz.');
+    } else {
+      showToast('Sipariş alındı! Puan kazanıyorsun…');
+    }
     openSheet('tracking');
   };
 
@@ -334,7 +344,8 @@ export function CheckoutSheet() {
 export function TrackingSheet() {
   const { sheet, closeSheet, lastOrder, setLastOrder } = useApp();
   const open = sheet === 'tracking';
-  const status = lastOrder?.status ?? 'preparing';
+  const status = lastOrder?.status ?? 'payment_pending';
+  const paymentPending = lastOrder?.paymentPending ?? status === 'payment_pending';
 
   useEffect(() => {
     if (!open || !lastOrder?.orderNumber) return;
@@ -346,23 +357,32 @@ export function TrackingSheet() {
           storeName: data.store_name,
           status: data.status,
           pointsEarned: data.points_earned,
+          paymentPending: data.status === 'payment_pending' || data.payment_status === 'pending',
+          paymentMethod: lastOrder.paymentMethod,
         });
       });
     };
     poll();
     const id = setInterval(poll, 8000);
     return () => clearInterval(id);
-  }, [open, lastOrder?.orderNumber, setLastOrder]);
+  }, [open, lastOrder?.orderNumber, lastOrder?.paymentMethod, setLastOrder]);
 
-  const statusTitle = status === 'preparing' ? 'Hazırlanıyor'
+  const statusTitle = paymentPending ? 'Ödeme bekleniyor'
+    : status === 'preparing' ? 'Hazırlanıyor'
     : status === 'ready' ? 'Hazır'
     : status === 'picked-up' ? 'Teslim Alındı'
     : status === 'delivered' ? 'Teslim Edildi'
-    : 'Sipariş Alındı';
+    : status === 'confirmed' ? 'Sipariş onaylandı'
+    : 'Sipariş oluşturuldu';
 
   const stepIndex = ['preparing', 'ready', 'picked-up', 'delivered'].indexOf(status);
 
-  const steps = [
+  const steps = paymentPending ? [
+    { label: 'Sipariş oluşturuldu', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
+    { label: 'Ödeme bekleniyor', desc: lastOrder?.paymentMethod === 'cash' ? 'Mağazada öde' : 'Ödeme onayı gerekli', done: false, current: true },
+    { label: 'Hazırlanıyor', desc: 'Ödeme sonrası başlayacak', done: false },
+    { label: 'Teslim', desc: lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan` : 'Afiyet olsun!', done: false },
+  ] : [
     { label: 'Sipariş alındı', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
     { label: 'Hazırlanıyor', desc: 'Barista ekibimiz hazırlıyor', done: stepIndex >= 0, current: status === 'preparing' },
     { label: 'Alış için hazır', desc: 'Hazır olunca bildirim alacaksın', done: stepIndex >= 1, current: status === 'ready' },
@@ -375,7 +395,11 @@ export function TrackingSheet() {
         <Text className="text-xs text-ink-400">{lastOrder ? `Sipariş ${lastOrder.orderNumber}` : 'Sipariş takibi'}</Text>
         <Text className="text-2xl font-bold text-ink-900">{statusTitle}</Text>
         <Text className="text-sm text-ex-red mt-1 font-medium">
-          {lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan kazandın` : 'Siparişin işleniyor'}
+          {paymentPending
+            ? (lastOrder?.paymentMethod === 'cash'
+              ? 'Mağazada ödeme yapabilirsiniz'
+              : 'Ödeme sağlayıcısı yapılandırılana kadar onay bekleniyor')
+            : lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan kazandın` : 'Siparişin işleniyor'}
         </Text>
       </View>
 

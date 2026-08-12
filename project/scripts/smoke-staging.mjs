@@ -202,18 +202,60 @@ async function customerTests(sb) {
     );
 
     if (legit?.order_number) {
-      const { data: pay } = await sb.rpc('record_order_payment', {
+      const { error: payErr } = await sb.rpc('record_order_payment', {
         p_order_number: legit.order_number,
         p_payment_status: 'paid',
         p_transaction_id: 'smoke-test',
         p_gateway: 'internal',
         p_refund_amount: null,
       });
+      const payBlocked = payErr?.message?.toLowerCase().includes('permission denied')
+        || payErr?.code === '42501';
       record(
         'customer',
-        'record_order_payment RPC',
-        pay?.error == null ? 'PASS' : 'FAIL',
-        pay?.error ?? pay?.payment_status ?? 'ok',
+        'record_order_payment blocked for customer',
+        payBlocked ? 'PASS' : 'FAIL',
+        payErr?.message ?? 'unexpected success',
+      );
+
+      const { data: cardOrder, error: cardErr } = await sb.rpc('create_order', createOrderArgs({
+        p_items: [{ productId: product.id, name: 'Card Pending', qty: 1, price: legitPrice }],
+        p_payment_method: 'card',
+      }));
+      const cardPending = !cardErr && cardOrder?.payment_status === 'pending'
+        && cardOrder?.status === 'payment_pending';
+      record(
+        'customer',
+        'card checkout payment_pending',
+        cardPending ? 'PASS' : 'FAIL',
+        cardErr?.message ?? `payment_status=${cardOrder?.payment_status} status=${cardOrder?.status}`,
+      );
+
+      const { data: walletOrder, error: walletErr } = await sb.rpc('create_order', createOrderArgs({
+        p_items: [{ productId: product.id, name: 'Wallet Pending', qty: 1, price: legitPrice }],
+        p_payment_method: 'wallet',
+      }));
+      const walletPending = !walletErr && walletOrder?.payment_status === 'pending'
+        && walletOrder?.status === 'payment_pending';
+      record(
+        'customer',
+        'wallet checkout payment_pending',
+        walletPending ? 'PASS' : 'FAIL',
+        walletErr?.message ?? `payment_status=${walletOrder?.payment_status} status=${walletOrder?.status}`,
+      );
+
+      const { error: webhookErr } = await sb.rpc('confirm_order_payment_webhook', {
+        p_order_number: legit.order_number,
+        p_amount: serverTotal,
+        p_transaction_id: 'smoke-blocked',
+      });
+      const webhookBlocked = webhookErr?.message?.toLowerCase().includes('permission denied')
+        || webhookErr?.code === '42501';
+      record(
+        'customer',
+        'confirm_order_payment_webhook blocked for client',
+        webhookBlocked ? 'PASS' : 'FAIL',
+        webhookErr?.message ?? 'unexpected success',
       );
     }
   } else {

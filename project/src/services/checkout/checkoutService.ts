@@ -86,17 +86,14 @@ export async function cancelOrder(
   return { error: r.error ?? null };
 }
 
-export async function recordOrderPayment(
+/** Staff-only: confirm cash payment at store (FAZ 0 — customers cannot confirm payments). */
+export async function confirmCashPayment(
   orderNumber: string,
-  paymentStatus: string,
-  transactionId?: string | null,
+  note?: string | null,
 ): Promise<{ error: string | null }> {
-  const { data, error } = await supabase.rpc('record_order_payment', {
+  const { data, error } = await supabase.rpc('confirm_cash_payment', {
     p_order_number: orderNumber,
-    p_payment_status: paymentStatus,
-    p_transaction_id: transactionId ?? null,
-    p_gateway: 'internal',
-    p_refund_amount: null,
+    p_note: note ?? null,
   });
   if (error) return { error: error.message };
   const r = data as { error?: string | null };
