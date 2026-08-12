@@ -92,10 +92,11 @@ async function main() {
   });
   let has70600 = false;
   if (signUp706.session) {
-    const { data: prepCust, error: prepErr } = await probe70600.rpc('prepare_user_account_deletion', {
+    const { error: prepErr } = await probe70600.rpc('prepare_user_account_deletion', {
       p_user_id: signUp706.user.id,
     });
-    has70600 = !prepErr && (prepCust?.error === 'forbidden' || prepCust?.success === false);
+    has70600 = prepErr?.message?.toLowerCase().includes('permission denied')
+      || prepErr?.code === '42501';
     if (prepErr?.message?.includes('does not exist')) has70600 = false;
   }
   row(

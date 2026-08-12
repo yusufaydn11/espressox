@@ -77,9 +77,10 @@ async function main() {
   audit('Store', 'Production staging URL guard', fileIncludes('app.config.js', 'STAGING_PROJECT_REF') ? 'PASS' : 'FAIL');
   audit('Store', 'Card payments production lock', fileIncludes('eas.json', 'EXPO_PUBLIC_ENABLE_CARD_PAYMENTS') ? 'PASS' : 'FAIL');
   audit('Store', 'Production env validator script', existsSync(resolve(root, 'scripts/validate-production-env.mjs')) ? 'PASS' : 'FAIL');
-  audit('Store', 'Account deletion anonymization migration', existsSync(resolve(migDir, '20260729270600_account_deletion_anonymization.sql.sql')) ? 'PASS' : 'FAIL', 'not deployed until db push');
+  audit('Store', 'Account deletion anonymization migration', existsSync(resolve(migDir, '20260729270600_account_deletion_anonymization.sql.sql')) ? 'PASS' : 'FAIL', '70600 in repo; apply to prod on cutover');
   audit('Store', 'delete-user calls anonymization RPC', fileIncludes('supabase/functions/delete-user/index.ts', 'prepare_user_account_deletion') ? 'PASS' : 'FAIL');
-  audit('Store', 'Store release RLS migration', existsSync(resolve(migDir, '20260729270700_store_release_rls_hardening.sql.sql')) ? 'PASS' : 'FAIL', 'not deployed until db push');
+  audit('Store', 'Store release RLS migration', existsSync(resolve(migDir, '20260729270700_store_release_rls_hardening.sql.sql')) ? 'PASS' : 'FAIL', '70700 in repo; apply to prod on cutover');
+  audit('Store', 'QR scan restore migration 70800', existsSync(resolve(migDir, '20260729270800_restore_qr_scan_full.sql.sql')) ? 'PASS' : 'FAIL', '70800 in repo; staging verified');
   audit('Store', 'Support entry in profile', fileIncludes('src/screens/customer/LegalSheet.tsx', 'SupportEntryButton') ? 'PASS' : 'FAIL');
 
   // ─── Build / lint / typecheck ───
@@ -170,7 +171,9 @@ async function main() {
   // FAZ 1 iyzico — repo ready, runtime blocked until merchant agreement
   audit('FAZ1 iyzico', 'Edge function retail-payment-initiate (repo)', existsSync(resolve(root, 'supabase/functions/retail-payment-initiate/index.ts')) ? 'PASS' : 'FAIL', 'code only');
   audit('FAZ1 iyzico', 'Edge function retail-payment-webhook (repo)', existsSync(resolve(root, 'supabase/functions/retail-payment-webhook/index.ts')) ? 'PASS' : 'FAIL', 'code only');
-  audit('FAZ1 iyzico', 'payment_intents table (staging)', 'BLOCKED', 'migration 70500 not pushed');
+  const { error: piErr } = await sb.from('payment_intents').select('id').limit(1);
+  const piMissing = piErr?.code === 'PGRST205' || piErr?.message?.includes('does not exist');
+  audit('FAZ1 iyzico', 'payment_intents table (staging)', piMissing ? 'BLOCKED' : 'PASS', piMissing ? '70500 not on linked project' : 'table exists');
   audit('FAZ1 iyzico', 'sandbox 3DS E2E payment flow', 'BLOCKED', 'IYZICO keys / merchant agreement pending');
   audit('FAZ1 iyzico', 'iyzico webhook signature (live)', 'BLOCKED', 'webhook not configured on staging');
 

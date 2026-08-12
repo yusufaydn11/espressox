@@ -20,6 +20,8 @@ export function LegalEntryButtons({ onOpen: _onOpen }: { onOpen?: (t: LegalTab) 
       </Sheet>
       <Pressable
         onPress={() => setTab('privacy')}
+        accessibilityRole="button"
+        accessibilityLabel="Gizlilik Politikası"
         className={cn('flex-row items-center gap-3 px-4 py-3.5 border-b border-ink-100 active:bg-ink-50')}
       >
         <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
@@ -30,6 +32,8 @@ export function LegalEntryButtons({ onOpen: _onOpen }: { onOpen?: (t: LegalTab) 
       </Pressable>
       <Pressable
         onPress={() => setTab('terms')}
+        accessibilityRole="button"
+        accessibilityLabel="Kullanım Şartları"
         className="flex-row items-center gap-3 px-4 py-3.5 border-b border-ink-100 active:bg-ink-50"
       >
         <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
@@ -101,6 +105,8 @@ export function SupportEntryButton() {
   return (
     <Pressable
       onPress={openSupport}
+      accessibilityRole="button"
+      accessibilityLabel="Destek"
       className="flex-row items-center gap-3 px-4 py-3.5 active:bg-ink-50"
     >
       <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
