@@ -170,9 +170,11 @@ export async function spendPoints(
 
 export async function lookupQrByCode(
   code: string,
+  storeId?: string | null,
 ): Promise<{ data: QrCodeRow | null; error: string | null }> {
   const { data: rpcData, error: rpcError } = await supabase.rpc('lookup_qr_for_scan', {
     p_code: code,
+    p_store_id: storeId ?? null,
   });
 
   if (!rpcError && rpcData && typeof rpcData === 'object') {

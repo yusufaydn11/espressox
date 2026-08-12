@@ -68,11 +68,22 @@ export async function fetchOrders(
 }
 
 export async function updateOrderStatus(id: string, status: string): Promise<void> {
-  const { error } = await supabase
+  const { data: order, error: fetchError } = await supabase
     .from('orders')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .select('order_number')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+  if (!order?.order_number) throw new Error('Sipariş bulunamadı');
+
+  const { data, error } = await supabase.rpc('advance_order_status', {
+    p_order_number: order.order_number,
+    p_new_status: status,
+    p_note: null,
+  });
   if (error) throw new Error(error.message);
+  const result = data as { error?: string | null };
+  if (result.error) throw new Error(result.error);
 }
 
 export async function fetchCustomerOrders(userId: string): Promise<OrderRow[]> {

@@ -63,6 +63,8 @@ export const SCAN_ERROR_LABELS: Record<string, string> = {
   invalid_code: 'Geçersiz QR kod formatı.',
   account_blocked: 'Müşteri hesabı engellenmiş.',
   not_owner: 'Bu mağaza için tarama yetkiniz yok.',
+  unauthorized: 'Bu şube için QR arama yetkiniz yok.',
+  self_scan_forbidden: 'Kendi QR kodunuzu tarayamazsınız.',
   store_required: 'Tarama için şube seçimi zorunlu.',
   store_not_found: 'Şube bulunamadı.',
   rate_limited: 'Çok hızlı tarama. Bir dakika bekleyin.',

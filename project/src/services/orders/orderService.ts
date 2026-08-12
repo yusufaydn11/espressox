@@ -156,13 +156,10 @@ export async function updateOrderByNumber(
   orderNumber: string,
   patch: { status?: string },
 ): Promise<{ error: string | null }> {
-  const dbPatch: Record<string, unknown> = {};
-  if (patch.status) dbPatch.status = patch.status;
-  const { error } = await supabase
-    .from('orders')
-    .update(dbPatch)
-    .eq('order_number', orderNumber);
-  return { error: error?.message ?? null };
+  if (patch.status) {
+    return updateOrderStatusByNumber(orderNumber, patch.status);
+  }
+  return { error: null };
 }
 
 export async function deleteOrderByNumber(orderNumber: string): Promise<{ error: string | null }> {

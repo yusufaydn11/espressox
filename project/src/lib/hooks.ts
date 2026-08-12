@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Store, type Reward, type CampaignRow, type NotificationPrefsRow } from '@/lib/supabase';
 import { fetchOrdersByUserId, createOrder as createOrderService } from '@/services/orders';
 import {
@@ -144,6 +144,7 @@ export function useQrScans() {
 
 export function useCreateOrder() {
   const { user, refreshProfile } = useAuth();
+  const inFlightRef = useRef(false);
 
   return useCallback(async (params: {
     items: { name: string; qty: number; price: number; productId?: string }[];
@@ -157,8 +158,11 @@ export function useCreateOrder() {
     benefitId?: string | null;
   }) => {
     if (!user) return { error: 'Giriş yapmalısınız' };
+    if (inFlightRef.current) return { error: 'Sipariş zaten gönderiliyor' };
+    inFlightRef.current = true;
 
-    const result = await createOrderService({
+    try {
+      const result = await createOrderService({
       items: params.items.map(it => ({
         name: it.name,
         qty: it.qty,
@@ -188,6 +192,9 @@ export function useCreateOrder() {
       paymentStatus: result.paymentStatus,
       orderStatus: result.orderStatus,
     };
+    } finally {
+      inFlightRef.current = false;
+    }
   }, [user, refreshProfile]);
 }
 

@@ -82,7 +82,7 @@ export function AdminScanner() {
     setResult(null);
 
     try {
-      const { data: qrRow, error: qrErr } = await lookupQrByCode(code);
+      const { data: qrRow, error: qrErr } = await lookupQrByCode(code, effectiveStoreId.trim());
 
       if (qrErr) {
         const msg = SCAN_ERROR_LABELS[qrErr] ?? qrErr;

@@ -4,7 +4,7 @@ import {
 import type { CartItem, Product, ProductOption } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { fetchEarnRate, addPoints as addPointsService, spendPoints as spendPointsService } from '@/services/loyalty';
+import { fetchEarnRate } from '@/services/loyalty';
 import { DEFAULT_EARN_RATE } from '@shared/constants/loyalty';
 import { computeCartPoints } from '@shared/utils/loyalty';
 import { normalizeToast, type ToastMessage } from '@shared/types/toast';
@@ -54,8 +54,6 @@ interface AppState {
   toggleFavorite: (id: string) => void;
 
   points: number;
-  addPoints: (n: number) => void;
-  spendPoints: (n: number) => void;
 
   toast: ToastMessage | null;
   showToast: (msg: string | ToastMessage) => void;
@@ -81,7 +79,7 @@ export interface Customization {
 const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { profile, refreshProfile, user } = useAuth();
+  const { profile, user } = useAuth();
   const [theme, setTheme] = useState<Theme>('light');
   const [previewAsCustomer, setPreviewAsCustomer] = useState(false);
 
@@ -166,16 +164,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [profile]);
 
-  const addPoints = useCallback((n: number) => {
-    if (!profile) return;
-    void addPointsService(n).then(() => refreshProfile());
-  }, [profile, refreshProfile]);
-
-  const spendPoints = useCallback((n: number) => {
-    if (!profile) return;
-    void spendPointsService(n).then(() => refreshProfile());
-  }, [profile, refreshProfile]);
-
   const value: AppState = {
     theme, toggleTheme, previewAsCustomer, setPreviewAsCustomer, tab, setTab,
     cart, addToCart, removeFromCart, updateQty, clearCart,
@@ -183,7 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sheet, openSheet, closeSheet,
     selectedProduct, setSelectedProduct,
     favorites, toggleFavorite,
-    points, addPoints, spendPoints,
+    points,
     toast, showToast,
     lastOrder, setLastOrder,
     selectedOrderNumber, setSelectedOrderNumber,

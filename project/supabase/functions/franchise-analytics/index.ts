@@ -120,12 +120,26 @@ Deno.serve(async (req: Request) => {
     const { data: pointsHistory } = await phQ.gte('created_at', start).lte('created_at', end);
 
     // --- 4. Orders ---
-    let ordersQ = admin.from('orders').select('id, store_id, total, status, created_at, points_earned');
+    let ordersQ = admin.from('orders').select('id, user_id, store_id, total, status, created_at, points_earned');
     if (scopeStoreId) ordersQ = ordersQ.eq('store_id', scopeStoreId);
     const { data: orders } = await ordersQ.gte('created_at', start).lte('created_at', end);
 
-    // --- 5. Profiles (customers) ---
-    const { data: profiles } = await admin.from('profiles').select('id, user_id, full_name, created_at, points, lifetime_points');
+    const orderRows = (orders ?? []) as Array<{ id: string; user_id: string; store_id: string | null; total: string; status: string; created_at: string; points_earned: number }>;
+    const scopedUserIds = new Set<string>([
+      ...orderRows.map(o => o.user_id).filter(Boolean),
+      ...(stampCards ?? []).map((s: { user_id: string }) => s.user_id),
+      ...(freeCoffees ?? []).map((f: { user_id: string }) => f.user_id),
+      ...(pointsHistory ?? []).map((p: { user_id: string }) => p.user_id),
+    ]);
+
+    // --- 5. Profiles (customers) — scoped to store activity for franchise ---
+    let profilesQ = admin.from('profiles').select('id, user_id, full_name, created_at, points, lifetime_points');
+    if (scopeStoreId && scopedUserIds.size > 0) {
+      profilesQ = profilesQ.in('user_id', [...scopedUserIds]);
+    } else if (scopeStoreId) {
+      profilesQ = profilesQ.eq('user_id', '00000000-0000-0000-0000-000000000000');
+    }
+    const { data: profiles } = await profilesQ;
 
     // --- 6. Suspicious activity ---
     let suspQ = admin.from('suspicious_activity').select('id, type, user_id, store_id, actor_id, severity, description, metadata, detected_at, resolved');
@@ -138,13 +152,14 @@ Deno.serve(async (req: Request) => {
     const { data: scans } = await scansQ.gte('scanned_at', start).lte('scanned_at', end).order('scanned_at', { ascending: false }).limit(500);
 
     // --- 8. Stores list (for HQ comparison) ---
-    const { data: stores } = await admin.from('stores').select('id, name');
+    let storesQ = admin.from('stores').select('id, name');
+    if (scopeStoreId) storesQ = storesQ.eq('id', scopeStoreId);
+    const { data: stores } = await storesQ;
 
     // ============ AGGREGATE ============
     const sCards = (stampCards ?? []) as Array<{ user_id: string; store_id: string | null; completed_at: string; reward_claimed: boolean }>;
     const fcs = (freeCoffees ?? []) as Array<{ user_id: string; store_id: string | null; product_id: string | null; product_name: string; redeemed_at: string; redeemed_by: string | null }>;
     const phRows = (pointsHistory ?? []) as Array<{ user_id: string; store_id: string | null; points: number; type: string; created_at: string; title: string }>;
-    const orderRows = (orders ?? []) as Array<{ id: string; store_id: string | null; total: string; status: string; created_at: string; points_earned: number }>;
     const profileRows = (profiles ?? []) as Array<{ id: string; user_id: string; full_name: string; created_at: string; points: number; lifetime_points: number }>;
     const suspRows = (suspicious ?? []) as Array<{ id: string; type: string; user_id: string | null; store_id: string | null; actor_id: string | null; severity: string; description: string; metadata: Record<string, unknown>; detected_at: string; resolved: boolean }>;
     const scanRows = (scans ?? []) as Array<{ user_id: string; store_id: string | null; scanned_at: string; scanned_by: string | null; action: string; dedup_token: string }>;
@@ -160,12 +175,17 @@ Deno.serve(async (req: Request) => {
     const totalRevenue = orderRows.reduce((s, o) => s + Number(o.total), 0);
 
     // Customer stats
-    const scopedProfileIds = scopeStoreId
-      ? new Set(orderRows.map(o => o.store_id === scopeStoreId ? o.id : null).filter(Boolean))
-      : new Set(profileRows.map(p => p.user_id));
-    const inRangeUsers = new Set([...phRows.map(p => p.user_id), ...orderRows.map(o => (o as { user_id?: string }).user_id ?? '').filter(Boolean), ...sCards.map(s => s.user_id), ...fcs.map(f => f.user_id)]);
+    const inRangeUsers = new Set([
+      ...phRows.map(p => p.user_id),
+      ...orderRows.map(o => o.user_id).filter(Boolean),
+      ...sCards.map(s => s.user_id),
+      ...fcs.map(f => f.user_id),
+    ]);
     const totalCustomers = scopeStoreId ? inRangeUsers.size : profileRows.length;
-    const newMembers = profileRows.filter(p => new Date(p.created_at) >= new Date(start) && new Date(p.created_at) <= new Date(end)).length;
+    const newMembers = profileRows.filter(p =>
+      new Date(p.created_at) >= new Date(start)
+      && new Date(p.created_at) <= new Date(end)
+    ).length;
     const activeUsers = inRangeUsers.size;
 
     // Free coffee product breakdown
