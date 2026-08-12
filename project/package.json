@@ -20,6 +20,8 @@
     "test:qr-gate": "node scripts/qr-loyalty-release-gate.mjs",
     "production:audit": "node scripts/production-audit.mjs",
     "validate:production-env": "node scripts/validate-production-env.mjs",
+    "validate:cutover-preflight": "node scripts/cutover-preflight.mjs",
+    "secret:scan": "node scripts/secret-scan.mjs",
     "test:e2e": "node scripts/e2e-http.mjs"
   },
   "dependencies": {

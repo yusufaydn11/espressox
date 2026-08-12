@@ -49,6 +49,9 @@ if (!url || !anonKey) {
 
 const results = [];
 
+/** QR from ephemeral customer — shared with staff/admin smoke (70401+ uses RPC-only lookup). */
+let sharedCustomerQr = null;
+
 function record(role, scenario, status, detail = '') {
   results.push({ role, scenario, status, detail });
   const icon = status === 'PASS' ? '✓' : status === 'FAIL' ? '✗' : status === 'BLOCKED' ? '⊘' : '○';
@@ -177,6 +180,14 @@ async function customerTests(sb) {
   const { data: ownOrders } = await sb.from('orders').select('id').limit(1);
   record('customer', 'read own orders', ownOrders ? 'PASS' : 'FAIL');
 
+  const { data: ownQr } = await sb.from('qr_codes').select('id, code').eq('user_id', (await sb.auth.getUser()).data.user?.id ?? '').limit(1).maybeSingle();
+  if (ownQr?.id && ownQr?.code) {
+    sharedCustomerQr = { id: ownQr.id, code: ownQr.code };
+    record('customer', 'QR code for staff smoke', 'PASS', ownQr.code.slice(0, 16));
+  } else {
+    record('customer', 'QR code for staff smoke', 'NOT TESTED', 'no qr_codes row after signup');
+  }
+
   const { data: benefits, error: benErr } = await sb.rpc('get_checkout_benefits', { p_store_id: null });
   const v3Benefits = !benErr && benefits && benefits.benefits != null;
   record(
@@ -267,6 +278,28 @@ function qrScanDetail(data, rpcError) {
   return data?.error ?? rpcError?.message ?? 'no response';
 }
 
+async function resolveStaffQr(sb) {
+  if (sharedCustomerQr?.id && sharedCustomerQr?.code) {
+    const { data: lookup, error: lookupErr } = await sb.rpc('lookup_qr_for_scan', {
+      p_code: sharedCustomerQr.code,
+    });
+    if (!lookupErr && lookup?.id) {
+      return { id: lookup.id, code: sharedCustomerQr.code, source: 'shared_customer_rpc' };
+    }
+    // 70401+ may block staff table/RPC lookup — use id from customer smoke session
+    return { id: sharedCustomerQr.id, code: sharedCustomerQr.code, source: 'shared_customer_id' };
+  }
+  const { data: qr, error: qrErr } = await sb
+    .from('qr_codes')
+    .select('id, code')
+    .eq('is_active', true)
+    .neq('user_id', (await sb.auth.getUser()).data.user?.id ?? '')
+    .limit(1)
+    .maybeSingle();
+  if (qrErr || !qr?.id) return null;
+  return { ...qr, source: 'table_fallback' };
+}
+
 async function staffTests(sb, session) {
   const { data: role } = await sb.from('user_roles').select('role, store_id').eq('user_id', session.user.id).maybeSingle();
   record('staff', 'role is staff/store_manager', ['staff', 'store_manager'].includes(role?.role ?? '') ? 'PASS' : 'FAIL', role?.role ?? 'none');
@@ -282,26 +315,22 @@ async function staffTests(sb, session) {
     record('staff', 'read store orders', 'NOT TESTED', 'no store_id on role');
   }
 
-  const { data: qr, error: qrErr } = await sb
-    .from('qr_codes')
-    .select('id, code')
-    .eq('is_active', true)
-    .neq('user_id', session.user.id)
-    .limit(1)
-    .maybeSingle();
+  const qr = await resolveStaffQr(sb);
 
-  if (qrErr || !qr?.id) {
-    record('staff', 'qr_scan requires store_id', 'NOT TESTED', qrErr?.message ?? 'no accessible customer QR');
+  if (!qr?.id) {
+    record('staff', 'qr_scan requires store_id', 'NOT TESTED', 'no customer QR via RPC or table');
     return;
   }
 
   if (qr.code) {
     const { data: lookup } = await sb.rpc('lookup_qr_for_scan', { p_code: qr.code });
+    const lookupOk = lookup?.id === qr.id;
+    const lookupStoreCtx = lookup?.error === 'store_required';
     record(
       'staff',
       'lookup_qr_for_scan',
-      lookup?.id === qr.id ? 'PASS' : 'FAIL',
-      lookup?.error ?? lookup?.code ?? 'mismatch',
+      lookupOk ? 'PASS' : lookupStoreCtx ? 'NOT TESTED' : 'FAIL',
+      lookup?.error ?? lookup?.code ?? qr.source,
     );
   }
 
@@ -379,16 +408,10 @@ async function adminTests(sb, session) {
   const { data: roles } = await sb.from('user_roles').select('user_id').limit(3);
   record('admin', 'read user_roles', roles ? 'PASS' : 'FAIL');
 
-  const { data: qr, error: qrErr } = await sb
-    .from('qr_codes')
-    .select('id')
-    .eq('is_active', true)
-    .neq('user_id', session.user.id)
-    .limit(1)
-    .maybeSingle();
+  const qr = await resolveStaffQr(sb);
 
-  if (qrErr || !qr?.id) {
-    record('admin', 'qr_scan requires store_id', 'NOT TESTED', qrErr?.message ?? 'no accessible customer QR');
+  if (!qr?.id) {
+    record('admin', 'qr_scan requires store_id', 'NOT TESTED', 'no customer QR via RPC or table');
     return;
   }
 

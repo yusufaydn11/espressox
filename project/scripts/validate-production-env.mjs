@@ -128,6 +128,27 @@ if (isProduction) {
     warn('EXPO_PUBLIC_MAINTENANCE_MODE is true — production users will see maintenance screen.');
   }
 
+  for (const smokeKey of Object.keys(process.env).filter(k => k.startsWith('SMOKE_'))) {
+    if (process.env[smokeKey]) {
+      fail(`Production build blocked: ${smokeKey} must not be set in production environment.`);
+    }
+  }
+
+  for (const iyzicoKey of ['IYZICO_API_KEY', 'IYZICO_SECRET_KEY']) {
+    if (process.env[iyzicoKey]) {
+      fail(`Production build blocked: ${iyzicoKey} must only exist in Supabase Edge secrets, not client env.`);
+    }
+  }
+
+  for (const [name, value] of [
+    ['EXPO_PUBLIC_PRIVACY_POLICY_URL', process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ?? ''],
+    ['EXPO_PUBLIC_TERMS_URL', process.env.EXPO_PUBLIC_TERMS_URL ?? ''],
+  ]) {
+    if (!value) {
+      warn(`${name} not set — store submission requires hosted HTTPS URL in EAS production secrets.`);
+    }
+  }
+
   checkPublicUrls(true);
 } else {
   if (supabaseUrl.includes(STAGING_PROJECT_REF)) {
