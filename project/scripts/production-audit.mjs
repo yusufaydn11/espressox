@@ -59,7 +59,7 @@ async function main() {
   audit('Frontend', 'OAuth signInWithOAuth wired', fileIncludes('src/context/AuthContext.tsx', 'signInWithOAuth') ? 'PASS' : 'FAIL');
   audit('Frontend', 'Email verification gate', fileIncludes('src/App.tsx', 'email_confirmed') || fileIncludes('src/screens/auth/EmailVerificationScreen.tsx', 'EmailVerification') ? 'PASS' : 'FAIL');
   audit('Frontend', 'Addresses service', fileIncludes('src/services/profile/addressService.ts', 'customer_addresses') ? 'PASS' : 'FAIL');
-  audit('Frontend', 'Lazy sheet imports', fileIncludes('src/screens/customer/CustomerApp.tsx', 'lazy(') ? 'PASS' : 'FAIL');
+  audit('Frontend', 'Customer sheet imports', fileIncludes('src/screens/customer/CustomerApp.tsx', 'RewardsSheet') && fileIncludes('src/screens/customer/CustomerApp.tsx', 'OrdersSheet') ? 'PASS' : 'FAIL');
 
   // ─── Store readiness (native) ───
   audit('Store', 'app.config.js present', existsSync(resolve(root, 'app.config.js')) ? 'PASS' : 'FAIL');

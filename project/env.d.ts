@@ -11,3 +11,8 @@ declare const process: {
     EAS_PROJECT_ID?: string;
   };
 };
+
+declare module 'react-dom' {
+  import type { ReactNode, ReactPortal } from 'react';
+  export function createPortal(children: ReactNode, container: Element): ReactPortal;
+}

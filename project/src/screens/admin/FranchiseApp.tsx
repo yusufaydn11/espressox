@@ -13,12 +13,15 @@ import { useAdmin } from '@/context/AdminContext';
 import {
   fetchStoreOrders,
   updateOrderStatusByNumber,
+  fetchOrderByNumber,
 } from '@/services/orders';
+import { confirmCashPayment } from '@/services/checkout/checkoutService';
 import {
   ORDER_STATUS_LABELS_FRANCHISE,
   ORDER_STATUS_BADGE_BG,
   ORDER_STATUS_BADGE_TEXT,
-  nextOrderStatus,
+  isFranchiseActiveOrderStatus,
+  getFranchiseOrderAction,
 } from '@shared/constants/orders';
 import { formatOrderTotalDisplay } from '@shared/utils/orderDisplay';
 import { fetchDailyBenefitStats, fetchStoreOperationSnapshot } from '@/services/loyalty';
@@ -34,6 +37,7 @@ import {
 import {
   getNotificationBadge,
   isB2BSource,
+  resolveStoreNotificationOrderRef,
 } from '@shared/constants/notifications';
 import { AdminScanner } from '@/screens/admin/AdminScanner';
 import { FranchiseReports } from '@/screens/admin/FranchiseReports';
@@ -51,7 +55,6 @@ import { cartService } from '@/services/b2b';
 const statusLabel = (s: string) => ORDER_STATUS_LABELS_FRANCHISE[s] ?? s;
 const statusBadge = (s: string) => ORDER_STATUS_BADGE_BG[s] ?? 'bg-ink-100';
 const statusBadgeText = (s: string) => ORDER_STATUS_BADGE_TEXT[s] ?? 'text-ink-600';
-const nextStatus = nextOrderStatus;
 
 type FranchisePage = string;
 
@@ -97,6 +100,8 @@ type StoreOrder = {
   type: string;
   time: string;
   created_at: string;
+  payment_method?: string | null;
+  payment_status?: string | null;
 };
 
 type StoreNotif = {
@@ -119,6 +124,7 @@ export function FranchiseApp() {
   const showSidebar = isWide || sidebarOpen;
   const [storeName, setStoreName] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [highlightOrderNumber, setHighlightOrderNumber] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [roleLandingDone, setRoleLandingDone] = useState(false);
@@ -152,6 +158,7 @@ export function FranchiseApp() {
       setSelectedOrderId(orderId);
       setPage('b2b_order_detail');
     } else {
+      setHighlightOrderNumber(orderId);
       setPage('orders');
     }
   }, []);
@@ -331,7 +338,13 @@ export function FranchiseApp() {
         <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
           {/* Store Operations */}
           {page === 'dashboard' && <FranchiseDashboard storeId={storeId} storeName={storeName} onGoOrders={() => setPage('orders')} />}
-          {page === 'orders' && <FranchiseOrders storeId={storeId} readOnly={role === 'staff'} />}
+          {page === 'orders' && (
+            <FranchiseOrders
+              storeId={storeId}
+              readOnly={role === 'staff'}
+              highlightOrderNumber={highlightOrderNumber}
+            />
+          )}
           {page === 'scanner' && <AdminScanner />}
           {page === 'reports' && <FranchiseReports storeId={storeId} storeName={storeName} />}
           {page === 'notifications' && <FranchiseNotifications storeId={storeId} onOpenOrder={handleSelectOrder} />}
@@ -391,7 +404,7 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
     setStats({
       todayOrders: todayRows.length,
       todayRevenue: todayRows.reduce((s, o) => s + Number(o.total), 0),
-      activeOrders: all.filter(o => o.status === 'preparing' || o.status === 'ready').length,
+      activeOrders: all.filter(o => isFranchiseActiveOrderStatus(o.status)).length,
       readyOrders: all.filter(o => o.status === 'ready').length,
     });
     setRecent(all.slice(0, 5).map(o => ({
@@ -455,11 +468,20 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
   );
 }
 
-function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOnly?: boolean }) {
+function FranchiseOrders({
+  storeId,
+  readOnly,
+  highlightOrderNumber,
+}: {
+  storeId: string | null;
+  readOnly?: boolean;
+  highlightOrderNumber?: string | null;
+}) {
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [filter, setFilter] = useState<'active' | 'all'>('active');
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [opSnapshot, setOpSnapshot] = useState<Awaited<ReturnType<typeof fetchStoreOperationSnapshot>> | null>(null);
   const [dailyStats, setDailyStats] = useState<{ freeOrders: number; stampRedemptions: number; rewardRedemptions: number } | null>(null);
 
@@ -495,25 +517,43 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
       type: o.order_type,
       time: new Date(o.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
       created_at: o.created_at,
+      payment_method: o.payment_method,
+      payment_status: o.payment_status,
     })));
     setLoading(false);
   }, [storeId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const advance = useCallback(async (orderNumber: string, currentStatus: string) => {
-    const next = nextStatus(currentStatus);
-    if (!next) return;
-    setUpdating(orderNumber);
-    const { error } = await updateOrderStatusByNumber(orderNumber, next);
-    if (!error) {
-      setOrders(prev => prev.map(o => o.id === orderNumber ? { ...o, status: next } : o));
+  useEffect(() => {
+    if (!highlightOrderNumber) return;
+    setExpandedOrder(highlightOrderNumber);
+    const match = orders.find(o => o.id === highlightOrderNumber);
+    if (match && !isFranchiseActiveOrderStatus(match.status)) {
+      setFilter('all');
+    }
+  }, [highlightOrderNumber, orders]);
+
+  const runAction = useCallback(async (order: StoreOrder) => {
+    const action = getFranchiseOrderAction(order);
+    if (!action || action.kind === 'waiting') return;
+    setUpdating(order.id);
+    if (action.kind === 'confirm_cash') {
+      const { error } = await confirmCashPayment(order.id);
+      if (!error) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'confirmed', payment_status: 'paid' } : o));
+      }
+    } else {
+      const { error } = await updateOrderStatusByNumber(order.id, action.nextStatus);
+      if (!error) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: action.nextStatus } : o));
+      }
     }
     setUpdating(null);
   }, []);
 
   const visible = filter === 'active'
-    ? orders.filter(o => o.status === 'preparing' || o.status === 'ready')
+    ? orders.filter(o => isFranchiseActiveOrderStatus(o.status))
     : orders;
 
   if (loading) return <View className="items-center justify-center py-20"><View className="h-8 w-8 rounded-full border-2 border-ex-red border-t-transparent" /></View>;
@@ -556,8 +596,16 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
               { total: o.total, points_earned: 0, user_id: o.user_id, store_id: storeId, created_at: o.created_at },
               opSnapshot,
             ) : null;
+            const action = getFranchiseOrderAction(o);
+            const isExpanded = expandedOrder === o.id;
+            const isHighlighted = highlightOrderNumber === o.id;
             return (
-            <View key={o.id} className={cn('rounded-2xl bg-white border shadow-card p-4', benefit && benefit.kind !== 'paid' ? 'border-green-200 bg-green-50/30' : 'border-ink-100')}>
+            <View key={o.id} className={cn(
+              'rounded-2xl bg-white border shadow-card p-4',
+              benefit && benefit.kind !== 'paid' ? 'border-green-200 bg-green-50/30' : 'border-ink-100',
+              isHighlighted && 'border-ex-red ring-2 ring-ex-red/20',
+            )}>
+              <Pressable onPress={() => setExpandedOrder(prev => prev === o.id ? null : o.id)}>
               <View className="flex-row items-start gap-3">
                 <View className="h-11 w-11 rounded-xl bg-ink-900 items-center justify-center shrink-0"><Coffee size={18} color="#fff" /></View>
                 <View className="flex-1 min-w-0">
@@ -577,28 +625,26 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
                   {formatOrderTotalDisplay(o.total, n => `₺${n.toLocaleString('tr-TR')}`)}
                 </Text>
               </View>
-              {!readOnly && (
+              {isExpanded && <OrderLineItems orderNumber={o.id} />}
+              </Pressable>
+              {!readOnly && action && (
               <View className="flex-row flex-wrap items-stretch gap-2 mt-3">
-                {o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'picked-up' && (
+                {action.kind === 'waiting' ? (
+                  <View className="min-w-[140px] flex-grow px-4 py-2.5 rounded-xl bg-ink-100">
+                    <Text className="text-sm font-medium text-ink-500 text-center">{action.label}</Text>
+                  </View>
+                ) : (
                   <Pressable
-                    onPress={() => advance(o.id, o.status)}
+                    onPress={() => void runAction(o)}
                     disabled={updating === o.id}
-                    className="min-w-[140px] flex-grow flex-row items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-ex-red active:bg-ex-redDark disabled:opacity-40"
+                    className={cn(
+                      'min-w-[140px] flex-grow flex-row items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl disabled:opacity-40',
+                      action.kind === 'confirm_cash' ? 'bg-purple-600 active:bg-purple-700' : 'bg-ex-red active:bg-ex-redDark',
+                    )}
                   >
                     {updating === o.id
                       ? <View className="h-4 w-4 rounded-full border-2 border-white border-t-transparent" />
-                      : <Text className="text-sm font-medium text-white">{nextStatus(o.status) === 'ready' ? 'Hazır olarak işaretle' : nextStatus(o.status) === 'picked-up' ? 'Teslim alındı' : 'Sıradaki adım'}</Text>}
-                  </Pressable>
-                )}
-                {o.status === 'picked-up' && (
-                  <Pressable
-                    onPress={() => advance(o.id, o.status)}
-                    disabled={updating === o.id}
-                    className="min-w-[140px] flex-grow flex-row items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-green-600 active:bg-green-700 disabled:opacity-40"
-                  >
-                    {updating === o.id
-                      ? <View className="h-4 w-4 rounded-full border-2 border-white border-t-transparent" />
-                      : <Text className="text-sm font-medium text-white">Teslim edildi olarak işaretle</Text>}
+                      : <Text className="text-sm font-medium text-white">{action.label}</Text>}
                   </Pressable>
                 )}
               </View>
@@ -607,6 +653,51 @@ function FranchiseOrders({ storeId, readOnly }: { storeId: string | null; readOn
           );})}
         </View>
       )}
+    </View>
+  );
+}
+
+function OrderLineItems({ orderNumber }: { orderNumber: string }) {
+  const [lines, setLines] = useState<Array<{ name: string; quantity: number; unit_price: number }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    void fetchOrderByNumber(orderNumber).then(({ data }) => {
+      setLines((data?.order_items ?? []).map(i => ({
+        name: i.name,
+        quantity: i.quantity,
+        unit_price: Number(i.unit_price),
+      })));
+      setLoading(false);
+    });
+  }, [orderNumber]);
+
+  if (loading) {
+    return (
+      <View className="mt-3 pt-3 border-t border-ink-100 items-center py-2">
+        <View className="h-4 w-4 rounded-full border-2 border-ex-red border-t-transparent" />
+      </View>
+    );
+  }
+
+  if (lines.length === 0) {
+    return (
+      <View className="mt-3 pt-3 border-t border-ink-100">
+        <Text className="text-xs text-ink-400">Ürün detayı yok</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View className="mt-3 pt-3 border-t border-ink-100 gap-1.5">
+      <Text className="text-[10px] font-semibold text-ink-400 uppercase tracking-wide mb-0.5">Sipariş içeriği</Text>
+      {lines.map((line, idx) => (
+        <View key={`${line.name}-${idx}`} className="flex-row items-center justify-between">
+          <Text className="text-sm text-ink-700 flex-1" numberOfLines={2}>{line.quantity}x {line.name}</Text>
+          <Text className="text-sm font-medium text-ink-900 ml-2">₺{(line.unit_price * line.quantity).toLocaleString('tr-TR')}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -639,9 +730,9 @@ function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | nu
       await markNotificationRead(n.id);
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
     }
-    const orderId = n.data?.order_id as string | undefined;
+    const orderRef = resolveStoreNotificationOrderRef({ body: n.body, data: n.data });
     const source = n.data?.source as string | undefined;
-    if (orderId) onOpenOrder(orderId, source);
+    if (orderRef) onOpenOrder(orderRef, source);
   };
 
   if (loading) return <View className="items-center justify-center py-20"><View className="h-8 w-8 rounded-full border-2 border-ex-red border-t-transparent" /></View>;
@@ -656,12 +747,12 @@ function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | nu
         </View>
       ) : (
         notifs.map(n => {
-          const orderId = n.data?.order_id as string | undefined;
+          const orderRef = resolveStoreNotificationOrderRef({ body: n.body, data: n.data });
           const isB2B = isB2BSource(n.data?.source as string | undefined);
           const badge = getNotificationBadge(n.is_read);
           return (
-            <Pressable key={n.id} onPress={() => handlePress(n)} disabled={!orderId}>
-              <View className={cn('rounded-2xl border shadow-card p-4', n.is_read ? 'bg-white border-ink-100' : 'bg-white border-ex-red/20', orderId && 'active:opacity-70')}>
+            <Pressable key={n.id} onPress={() => handlePress(n)} disabled={!orderRef}>
+              <View className={cn('rounded-2xl border shadow-card p-4', n.is_read ? 'bg-white border-ink-100' : 'bg-white border-ex-red/20', orderRef && 'active:opacity-70')}>
                 <View className="flex-row items-start gap-3">
                   <View className={cn('h-9 w-9 rounded-xl items-center justify-center shrink-0', badge.container)}>
                     <Bell size={16} color={badge.iconColor} />
@@ -674,7 +765,7 @@ function FranchiseNotifications({ storeId, onOpenOrder }: { storeId: string | nu
                     <Text className="text-sm text-ink-500 mt-0.5">{n.body}</Text>
                     <View className="flex-row items-center gap-2 mt-1.5">
                       <Text className="text-[11px] text-ink-300">{new Date(n.created_at).toLocaleString('tr-TR')}</Text>
-                      {orderId && <View className="flex-row items-center gap-1"><View className="h-1 w-1 rounded-full bg-ink-300" /><Text className="text-[11px] text-ex-red font-medium">Siparişe Git</Text></View>}
+                      {orderRef && <View className="flex-row items-center gap-1"><View className="h-1 w-1 rounded-full bg-ink-300" /><Text className="text-[11px] text-ex-red font-medium">Siparişe Git</Text></View>}
                     </View>
                   </View>
                 </View>

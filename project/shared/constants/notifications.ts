@@ -26,27 +26,54 @@ export function filterNotificationsByStoreId<T extends { data: Record<string, un
 
 export type NotificationTapAction = {
   orderId?: string;
+  orderNumber?: string;
   source?: string;
   deepLink?: string;
   openB2BOrder: boolean;
   openStoreOrders: boolean;
 };
 
+/** Extract retail order number (EX-123) from notification body text. */
+export function parseOrderNumberFromBody(body: string): string | undefined {
+  const match = body.match(/\bEX-\d+\b/);
+  return match?.[0];
+}
+
+/** Resolve order reference for franchise store panel taps (order_number preferred). */
+export function resolveStoreNotificationOrderRef(input: {
+  body: string;
+  data: Record<string, unknown> | null | undefined;
+}): string | undefined {
+  const data = input.data;
+  if (typeof data?.order_number === 'string') return data.order_number;
+  if (typeof data?.order_id === 'string') {
+    if (data.order_id.startsWith('EX-')) return data.order_id;
+    return data.order_id;
+  }
+  return parseOrderNumberFromBody(input.body);
+}
+
 /** Central deep-link / tap resolution for notification payloads. */
 export function resolveNotificationTapAction(
   data: Record<string, unknown> | null | undefined,
+  body?: string,
 ): NotificationTapAction {
   const orderId = typeof data?.order_id === 'string' ? data.order_id : undefined;
+  const orderNumber =
+    (typeof data?.order_number === 'string' ? data.order_number : undefined)
+    ?? (body ? parseOrderNumberFromBody(body) : undefined);
   const source = typeof data?.source === 'string' ? data.source : undefined;
   const deepLink = typeof data?.deep_link === 'string' ? data.deep_link : undefined;
   const isB2B = isB2BSource(source);
+  const ref = orderNumber ?? orderId;
 
   return {
     orderId,
+    orderNumber,
     source,
     deepLink,
-    openB2BOrder: !!orderId && isB2B,
-    openStoreOrders: !!orderId && !isB2B,
+    openB2BOrder: !!ref && isB2B,
+    openStoreOrders: !!ref && !isB2B,
   };
 }
 

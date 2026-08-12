@@ -1,5 +1,6 @@
 export {
   fetchOrdersByUserId,
+  fetchOrderByNumber,
   createOrder,
   fetchStoreOrders,
   updateOrderStatusByNumber,

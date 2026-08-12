@@ -1,5 +1,5 @@
-import { Pressable, View, type PressableProps } from 'react-native';
-import type { ReactNode } from 'react';
+import { Children, Fragment, isValidElement, type ReactNode } from 'react';
+import { Pressable, View, Text, type PressableProps } from 'react-native';
 import { cn } from '@/lib/utils';
 import { buttonClasses, type ButtonClassVariant } from '@shared/design/classNames';
 
@@ -23,6 +23,47 @@ const sizes: Record<Size, string> = {
   lg: 'px-6 py-4 text-base rounded-2xl gap-2.5',
 };
 
+const labelSizes: Record<Size, string> = {
+  sm: 'text-xs',
+  md: 'text-sm',
+  lg: 'text-base',
+};
+
+const labelColors: Record<Variant, string> = {
+  primary: 'text-white',
+  secondary: 'text-ink-800',
+  gold: 'text-white',
+  dark: 'text-white',
+  outline: 'text-ink-800',
+  ghost: 'text-ink-500',
+  subtle: 'text-ink-600',
+  danger: 'text-white',
+};
+
+function wrapButtonChildren(children: ReactNode, labelClassName: string): ReactNode {
+  return Children.map(Children.toArray(children), (child, index) => {
+    if (child == null || typeof child === 'boolean') return null;
+
+    if (typeof child === 'string' || typeof child === 'number') {
+      return (
+        <Text key={`btn-label-${index}`} className={labelClassName}>
+          {String(child)}
+        </Text>
+      );
+    }
+
+    if (isValidElement(child) && child.type === Fragment) {
+      return (
+        <Fragment key={`btn-frag-${index}`}>
+          {wrapButtonChildren(child.props.children, labelClassName)}
+        </Fragment>
+      );
+    }
+
+    return child;
+  });
+}
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -32,6 +73,8 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
+  const labelClassName = cn('font-medium', labelSizes[size], labelColors[variant]);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,7 +88,7 @@ export function Button({
       )}
       {...props}
     >
-      {children}
+      {wrapButtonChildren(children, labelClassName)}
     </Pressable>
   );
 }

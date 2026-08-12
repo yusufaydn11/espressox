@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2 } from 'lucide-react';
+import { Plus, MapPin, Clock, Wifi, Car, Coffee, Edit2, Trash2, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button, ButtonRow } from '@/components/ui/Button';
-import { Modal, ConfirmDialog, FormField, TextInput, Select, Toggle } from '@/components/ui/Modal';
+import { ConfirmDialog, FormField, TextInput, Toggle } from '@/components/ui/Modal';
 import { useAdmin, genId } from '@/context/AdminContext';
 import { cn } from '@/lib/utils';
 import type { Store } from '@/lib/supabase';
@@ -38,6 +38,60 @@ export function AdminStores() {
       <View className="flex-row justify-end">
         <Button variant="gold" onPress={openCreate}><Plus size={16} color="#fff" /> Mağaza ekle</Button>
       </View>
+
+      {(creating || editing) && (
+        <Card className="p-5 border-ex-red/20 gap-4">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-lg font-bold text-ink-900">
+              {creating ? 'Yeni Mağaza' : 'Mağazayı Düzenle'}
+            </Text>
+            <Pressable onPress={closeForm} hitSlop={8}><X size={20} color="#9494A0" /></Pressable>
+          </View>
+          <FormField label="Mağaza adı"><TextInput value={form.name} onChangeText={v => set('name', v)} placeholder="Örn. Levent Mağaza" /></FormField>
+          <FormField label="Adres"><TextInput value={form.address} onChangeText={v => set('address', v)} placeholder="Cadde, No, İlçe, Şehir" /></FormField>
+          <View className="flex-row gap-3 flex-wrap">
+            <View className="flex-1 min-w-[140px]"><FormField label="Çalışma saatleri"><TextInput value={form.hours} onChangeText={v => set('hours', v)} placeholder="07:00 – 22:00" /></FormField></View>
+            <View className="flex-1 min-w-[100px]"><FormField label="Enlem"><TextInput value={String(form.lat)} onChangeText={v => set('lat', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
+            <View className="flex-1 min-w-[100px]"><FormField label="Boylam"><TextInput value={String(form.lng)} onChangeText={v => set('lng', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
+          </View>
+          <FormField label="Yoğunluk">
+            <View className="flex-row gap-2">
+              {([
+                { label: 'Sakin', value: 'quiet' },
+                { label: 'Orta', value: 'moderate' },
+                { label: 'Yoğun', value: 'busy' },
+              ] as const).map(opt => (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => set('busy', opt.value)}
+                  className={cn(
+                    'px-4 py-2.5 rounded-xl border',
+                    form.busy === opt.value ? 'border-ex-red bg-ex-red/5' : 'border-ink-200 bg-cream-50',
+                  )}
+                >
+                  <Text className={cn('text-sm', form.busy === opt.value ? 'text-ex-red font-semibold' : 'text-ink-700')}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </FormField>
+          <View className="flex-row gap-3 flex-wrap">
+            <View className="flex-1 min-w-[140px]"><FormField label="Telefon"><TextInput value={form.phone ?? ''} onChangeText={v => set('phone', v)} placeholder="+90 212 ..." /></FormField></View>
+            <View className="flex-1 min-w-[140px]"><FormField label="WhatsApp"><TextInput value={form.whatsapp ?? ''} onChangeText={v => set('whatsapp', v)} placeholder="+90 532 ..." /></FormField></View>
+          </View>
+          <View className="flex-row flex-wrap gap-6">
+            <Toggle checked={form.open} onChange={v => set('open', v)} label="Açık" />
+            <Toggle checked={form.wifi} onChange={v => set('wifi', v)} label="WiFi" />
+            <Toggle checked={form.parking} onChange={v => set('parking', v)} label="Otopark" />
+            <Toggle checked={form.drive_thru} onChange={v => set('drive_thru', v)} label="Drive-thru" />
+          </View>
+          <ButtonRow className="pt-2">
+            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
+            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
+          </ButtonRow>
+        </Card>
+      )}
 
       <View className="flex-row flex-wrap gap-4">
         {stores.map(store => (
@@ -87,39 +141,6 @@ export function AdminStores() {
           </View>
         ))}
       </View>
-
-      <Modal open={creating || !!editing} onClose={closeForm} title={creating ? 'Yeni Mağaza' : 'Mağazayı Düzenle'}>
-        <View className="gap-4">
-          <FormField label="Mağaza adı"><TextInput value={form.name} onChangeText={v => set('name', v)} placeholder="Örn. Levent Mağaza" /></FormField>
-          <FormField label="Adres"><TextInput value={form.address} onChangeText={v => set('address', v)} placeholder="Cadde, No, İlçe, Şehir" /></FormField>
-          <View className="flex-row gap-3">
-            <View className="flex-1"><FormField label="Çalışma saatleri"><TextInput value={form.hours} onChangeText={v => set('hours', v)} placeholder="07:00 – 22:00" /></FormField></View>
-            <View className="flex-1"><FormField label="Enlem"><TextInput value={String(form.lat)} onChangeText={v => set('lat', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
-            <View className="flex-1"><FormField label="Boylam"><TextInput value={String(form.lng)} onChangeText={v => set('lng', Number(v) || 0)} keyboardType="numeric" /></FormField></View>
-          </View>
-          <FormField label="Yoğunluk">
-            <Select value={form.busy} onValueChange={v => set('busy', v as string)} options={[
-              { label: 'Sakin', value: 'quiet' },
-              { label: 'Orta', value: 'moderate' },
-              { label: 'Yoğun', value: 'busy' },
-            ]} />
-          </FormField>
-          <View className="flex-row gap-3">
-            <View className="flex-1"><FormField label="Telefon"><TextInput value={form.phone ?? ''} onChangeText={v => set('phone', v)} placeholder="+90 212 ..." /></FormField></View>
-            <View className="flex-1"><FormField label="WhatsApp"><TextInput value={form.whatsapp ?? ''} onChangeText={v => set('whatsapp', v)} placeholder="+90 532 ..." /></FormField></View>
-          </View>
-          <View className="flex-row flex-wrap gap-6">
-            <Toggle checked={form.open} onChange={v => set('open', v)} label="Açık" />
-            <Toggle checked={form.wifi} onChange={v => set('wifi', v)} label="WiFi" />
-            <Toggle checked={form.parking} onChange={v => set('parking', v)} label="Otopark" />
-            <Toggle checked={form.drive_thru} onChange={v => set('drive_thru', v)} label="Drive-thru" />
-          </View>
-          <ButtonRow className="pt-2">
-            <Button variant="outline" flex onPress={closeForm}>Vazgeç</Button>
-            <Button variant="gold" flex onPress={save} disabled={!form.name.trim()}>Kaydet</Button>
-          </ButtonRow>
-        </View>
-      </Modal>
 
       <ConfirmDialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={() => confirmDelete && deleteStore(confirmDelete)} title="Mağazayı sil" message="Bu mağazayı silmek istediğine emin misin?" />
     </View>

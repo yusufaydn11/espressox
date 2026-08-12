@@ -7,4 +7,14 @@
     background-color: rgba(200, 16, 46, 0.15);
     color: #18181B;
   }
+
+  /* RN Web: keep form controls interactive inside ScrollView / Pressable parents */
+  input,
+  textarea,
+  select,
+  [role="textbox"] {
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
 }

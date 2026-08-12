@@ -69,6 +69,27 @@ export function AdminApp() {
     setSidebarOpen(false);
   };
 
+  const pageContent = loading && page !== 'dashboard' ? (
+    <LoadingState label="Veriler yükleniyor…" />
+  ) : (
+    <>
+      {page === 'dashboard' && <AdminDashboard />}
+      {page === 'sales' && <AdminSales />}
+      {page === 'customers' && <AdminCustomers />}
+      {page === 'orders' && <AdminOrders />}
+      {page === 'products' && <AdminProducts />}
+      {page === 'campaigns' && <AdminCampaigns />}
+      {page === 'loyalty' && <AdminLoyalty />}
+      {page === 'push' && <AdminPush />}
+      {page === 'coupons' && <AdminCoupons />}
+      {page === 'stores' && <AdminStores />}
+      {page === 'employees' && <AdminEmployees />}
+      {page === 'analytics' && <AdminAnalytics />}
+      {page === 'scanner' && <AdminScanner />}
+      {page === 'franchise' && <AdminFranchise />}
+    </>
+  );
+
   return (
     <View className="flex-1 bg-cream-50 flex-row">
       {!isWide && sidebarOpen && (
@@ -161,28 +182,24 @@ export function AdminApp() {
           </View>
         </View>
 
-        <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
-          {loading && page !== 'dashboard' ? (
-            <LoadingState label="Veriler yükleniyor…" />
-          ) : (
-            <>
-              {page === 'dashboard' && <AdminDashboard />}
-              {page === 'sales' && <AdminSales />}
-              {page === 'customers' && <AdminCustomers />}
-              {page === 'orders' && <AdminOrders />}
-              {page === 'products' && <AdminProducts />}
-              {page === 'campaigns' && <AdminCampaigns />}
-              {page === 'loyalty' && <AdminLoyalty />}
-              {page === 'push' && <AdminPush />}
-              {page === 'coupons' && <AdminCoupons />}
-              {page === 'stores' && <AdminStores />}
-              {page === 'employees' && <AdminEmployees />}
-              {page === 'analytics' && <AdminAnalytics />}
-              {page === 'scanner' && <AdminScanner />}
-              {page === 'franchise' && <AdminFranchise />}
-            </>
-          )}
-        </ScrollView>
+        {Platform.OS === 'web' ? (
+          <View
+            className="flex-1 p-5"
+            // @ts-expect-error RN Web overflow auto for Chrome input focus
+            style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
+          >
+            {pageContent}
+          </View>
+        ) : (
+          <ScrollView
+            className="flex-1 p-5"
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {pageContent}
+          </ScrollView>
+        )}
       </View>
     </View>
   );

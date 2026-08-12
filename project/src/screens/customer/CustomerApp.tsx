@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { View, ScrollView } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
@@ -13,22 +13,17 @@ import { ProductDetailSheet } from '@/screens/customer/ProductDetailSheet';
 import { CartSheet, CheckoutSheet, TrackingSheet } from '@/screens/customer/OrderSheets';
 import { OnboardingFlow } from '@/screens/customer/OnboardingFlow';
 import { hasCompletedOnboarding } from '@/lib/onboarding';
-
-const RewardsSheet = lazy(() => import('@/screens/customer/RewardsSheet').then(m => ({ default: m.RewardsSheet })));
-const OrdersSheet = lazy(() => import('@/screens/customer/OrdersSheet').then(m => ({ default: m.OrdersSheet })));
-const OrderDetailSheet = lazy(() => import('@/screens/customer/OrderDetailSheet').then(m => ({ default: m.OrderDetailSheet })));
-const PromotionsSheet = lazy(() => import('@/screens/customer/PromotionsSheet').then(m => ({ default: m.PromotionsSheet })));
-const StoresSheet = lazy(() => import('@/screens/customer/StoresSheet').then(m => ({ default: m.StoresSheet })));
-const AiAssistantSheet = lazy(() => import('@/screens/customer/AiAssistantSheet').then(m => ({ default: m.AiAssistantSheet })));
-const NotificationSettingsSheet = lazy(() => import('@/screens/customer/NotificationSettingsSheet').then(m => ({ default: m.NotificationSettingsSheet })));
-const NotificationCenterSheet = lazy(() => import('@/screens/customer/NotificationCenterSheet').then(m => ({ default: m.NotificationCenterSheet })));
-const AccountSettingsSheet = lazy(() => import('@/screens/customer/AccountSettingsSheet').then(m => ({ default: m.AccountSettingsSheet })));
-const PasswordResetSheet = lazy(() => import('@/screens/customer/PasswordResetSheet').then(m => ({ default: m.PasswordResetSheet })));
-const AddressesSheet = lazy(() => import('@/screens/customer/AddressesSheet').then(m => ({ default: m.AddressesSheet })));
-
-function LazySheet({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>;
-}
+import { RewardsSheet } from '@/screens/customer/RewardsSheet';
+import { OrdersSheet } from '@/screens/customer/OrdersSheet';
+import { OrderDetailSheet } from '@/screens/customer/OrderDetailSheet';
+import { PromotionsSheet } from '@/screens/customer/PromotionsSheet';
+import { StoresSheet } from '@/screens/customer/StoresSheet';
+import { AiAssistantSheet } from '@/screens/customer/AiAssistantSheet';
+import { NotificationSettingsSheet } from '@/screens/customer/NotificationSettingsSheet';
+import { NotificationCenterSheet } from '@/screens/customer/NotificationCenterSheet';
+import { AccountSettingsSheet } from '@/screens/customer/AccountSettingsSheet';
+import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
+import { AddressesSheet } from '@/screens/customer/AddressesSheet';
 
 export function CustomerApp() {
   const { tab } = useApp();
@@ -65,17 +60,17 @@ export function CustomerApp() {
       <CartSheet />
       <CheckoutSheet />
       <TrackingSheet />
-      <LazySheet><PromotionsSheet /></LazySheet>
-      <LazySheet><StoresSheet /></LazySheet>
-      <LazySheet><AiAssistantSheet /></LazySheet>
-      <LazySheet><NotificationSettingsSheet /></LazySheet>
-      <LazySheet><NotificationCenterSheet /></LazySheet>
-      <LazySheet><AccountSettingsSheet /></LazySheet>
-      <LazySheet><PasswordResetSheet /></LazySheet>
-      <LazySheet><RewardsSheet /></LazySheet>
-      <LazySheet><OrdersSheet /></LazySheet>
-      <LazySheet><OrderDetailSheet /></LazySheet>
-      <LazySheet><AddressesSheet /></LazySheet>
+      <PromotionsSheet />
+      <StoresSheet />
+      <AiAssistantSheet />
+      <NotificationSettingsSheet />
+      <NotificationCenterSheet />
+      <AccountSettingsSheet />
+      <PasswordResetSheet />
+      <RewardsSheet />
+      <OrdersSheet />
+      <OrderDetailSheet />
+      <AddressesSheet />
 
       {onboardingChecked && showOnboarding && user?.id && (
         <OnboardingFlow userId={user.id} onComplete={() => setShowOnboarding(false)} />

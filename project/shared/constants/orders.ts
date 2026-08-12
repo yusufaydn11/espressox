@@ -24,6 +24,9 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
 
 /** Franchise mobile panel labels. */
 export const ORDER_STATUS_LABELS_FRANCHISE: Record<string, string> = {
+  created: 'Oluşturuldu',
+  payment_pending: 'Ödeme bekliyor',
+  confirmed: 'Onaylandı',
   preparing: 'Hazırlanıyor',
   ready: 'Hazır',
   'picked-up': 'Alındı',
@@ -34,6 +37,9 @@ export const ORDER_STATUS_LABELS_FRANCHISE: Record<string, string> = {
 
 /** NativeWind badge background classes (franchise panel). */
 export const ORDER_STATUS_BADGE_BG: Record<string, string> = {
+  created: 'bg-ink-100',
+  payment_pending: 'bg-orange-50',
+  confirmed: 'bg-purple-50',
   preparing: 'bg-amber-50',
   ready: 'bg-blue-50',
   'picked-up': 'bg-green-50',
@@ -44,6 +50,9 @@ export const ORDER_STATUS_BADGE_BG: Record<string, string> = {
 
 /** NativeWind badge text classes (franchise panel). */
 export const ORDER_STATUS_BADGE_TEXT: Record<string, string> = {
+  created: 'text-ink-600',
+  payment_pending: 'text-orange-700',
+  confirmed: 'text-purple-700',
   preparing: 'text-amber-700',
   ready: 'text-blue-700',
   'picked-up': 'text-green-700',
@@ -51,6 +60,43 @@ export const ORDER_STATUS_BADGE_TEXT: Record<string, string> = {
   scheduled: 'text-ink-600',
   cancelled: 'text-ex-red',
 };
+
+/** Terminal retail order statuses (hidden from franchise "Aktif" tab). */
+export const FRANCHISE_TERMINAL_ORDER_STATUSES = ['delivered', 'cancelled', 'completed'] as const;
+
+export function isFranchiseActiveOrderStatus(status: string): boolean {
+  return !FRANCHISE_TERMINAL_ORDER_STATUSES.includes(
+    status as (typeof FRANCHISE_TERMINAL_ORDER_STATUSES)[number],
+  );
+}
+
+export type FranchiseOrderAction =
+  | { kind: 'confirm_cash'; label: string }
+  | { kind: 'advance'; nextStatus: string; label: string }
+  | { kind: 'waiting'; label: string };
+
+export function getFranchiseOrderAction(order: {
+  status: string;
+  payment_method?: string | null;
+}): FranchiseOrderAction | null {
+  if (order.status === 'payment_pending') {
+    if (order.payment_method === 'cash') {
+      return { kind: 'confirm_cash', label: 'Nakit ödemeyi onayla' };
+    }
+    return { kind: 'waiting', label: 'Ödeme onayı bekleniyor' };
+  }
+  if (order.status === 'confirmed') {
+    return { kind: 'advance', nextStatus: 'preparing', label: 'Hazırlamaya al' };
+  }
+  const next = nextOrderStatus(order.status);
+  if (!next) return null;
+  const labels: Record<string, string> = {
+    ready: 'Hazır olarak işaretle',
+    'picked-up': 'Teslim alındı',
+    delivered: 'Teslim edildi olarak işaretle',
+  };
+  return { kind: 'advance', nextStatus: next, label: labels[next] ?? 'Sıradaki adım' };
+}
 
 /** Customer order history chip colors (NativeWind). */
 export const ORDER_STATUS_CHIP_CLASSES: Record<string, string> = {
