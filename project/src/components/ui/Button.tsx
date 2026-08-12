@@ -34,6 +34,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <Pressable
+      accessibilityRole="button"
       className={cn(
         'flex-row items-center justify-center font-medium active:opacity-90 disabled:opacity-40 shrink-0',
         buttonClasses[variant],

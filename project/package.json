@@ -14,7 +14,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "smoke:staging": "node scripts/smoke-staging.mjs",
+    "validate:pre-production": "node scripts/pre-production-validation.mjs",
+    "test:account-deletion": "node scripts/account-deletion-staging-test.mjs",
+    "test:migration-probe": "node scripts/migration-probe-staging.mjs",
+    "test:qr-gate": "node scripts/qr-loyalty-release-gate.mjs",
     "production:audit": "node scripts/production-audit.mjs",
+    "validate:production-env": "node scripts/validate-production-env.mjs",
     "test:e2e": "node scripts/e2e-http.mjs"
   },
   "dependencies": {
@@ -26,6 +31,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "expo": "~51.0.28",
     "expo-auth-session": "~5.5.2",
+    "expo-build-properties": "~0.12.5",
     "expo-camera": "~15.0.16",
     "expo-constants": "~16.0.2",
     "expo-crypto": "~13.0.2",

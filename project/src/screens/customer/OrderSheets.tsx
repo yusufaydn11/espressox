@@ -1,15 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, Image, TextInput as RNTextInput } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, Pressable, Image, TextInput as RNTextInput, Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { ShoppingBag, Minus, Plus, Trash2, Coffee, UtensilsCrossed, Store, CalendarClock, CreditCard, Check, ChevronRight, Sparkles, MapPin, Tag, Gift } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { fetchOrderByNumber } from '@/services/orders/orderService';
-import { fetchCheckoutBenefits, previewCheckout, type CheckoutBenefit, type CheckoutPreview } from '@/services/checkout/checkoutService';
+import { fetchCheckoutBenefits, previewCheckout, initiateRetailPayment, type CheckoutBenefit, type CheckoutPreview } from '@/services/checkout/checkoutService';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button, ButtonRow } from '@/components/ui/Button';
 import { formatPrice, cn } from '@/lib/utils';
 import { useStores, useCreateOrder } from '@/lib/hooks';
 import type { OrderType } from '@/types';
+
+/** Kart/cüzdan ödemesi yalnızca iyzico FAZ1 production deploy sonrası açılmalı. */
+const CARD_PAYMENTS_ENABLED = process.env.EXPO_PUBLIC_ENABLE_CARD_PAYMENTS === 'true';
+
+const PAYMENT_METHODS = [
+  ...(CARD_PAYMENTS_ENABLED
+    ? [
+        { id: 'card', label: 'Kredi/Banka Kartı', detail: 'Güvenli ödeme' },
+        { id: 'wallet', label: 'Espresso X Cüzdan', detail: 'Mağaza kredisi' },
+      ]
+    : []),
+  { id: 'cash', label: 'Nakit', detail: 'Mağazada öde' },
+] as const;
 
 const ORDER_ERROR_LABELS: Record<string, string> = {
   account_blocked: 'Hesabınız engellenmiştir. Destek ile iletişime geçin.',
@@ -108,14 +122,20 @@ export function CheckoutSheet() {
   const open = sheet === 'checkout';
   const [orderType, setOrderType] = useState<OrderType>('pickup');
   const [store, setStore] = useState('');
-  const [payment, setPayment] = useState('card');
+  const [payment, setPayment] = useState<string>(CARD_PAYMENTS_ENABLED ? 'card' : 'cash');
   const [placing, setPlacing] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [benefits, setBenefits] = useState<CheckoutBenefit[]>([]);
   const [selectedBenefit, setSelectedBenefit] = useState<CheckoutBenefit | null>(null);
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
+  const [cardHolderName, setCardHolderName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpireMonth, setCardExpireMonth] = useState('');
+  const [cardExpireYear, setCardExpireYear] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
   const { data: stores } = useStores();
   const createOrder = useCreateOrder();
+  const placingLockRef = useRef(false);
 
   const storeList = stores ?? [];
   const selectedStore = storeList.find(s => s.id === store) ?? storeList[0];
@@ -164,6 +184,7 @@ export function CheckoutSheet() {
   ];
 
   const placeOrder = async () => {
+    if (placingLockRef.current || placing) return;
     if (cart.length === 0) return;
     if (!selectedStore) {
       showToast('Sipariş için mağaza seçin veya mağaza listesini kontrol edin');
@@ -173,42 +194,78 @@ export function CheckoutSheet() {
       showToast('Hesabınız engellenmiştir');
       return;
     }
-    setPlacing(true);
-    const { error, orderNumber, pointsEarned, total, billingType, benefitTitle, paymentStatus, orderStatus } = await createOrder({
-      items: orderItems,
-      total: cartTotal,
-      storeId: selectedStore.id,
-      storeName: selectedStore.name,
-      orderType,
-      paymentMethod: payment,
-      couponCode: couponCode.trim() || null,
-      benefitType: selectedBenefit?.type ?? null,
-      benefitId: selectedBenefit?.id ?? null,
-    });
-    setPlacing(false);
-    if (error) { showToast('Sipariş başarısız: ' + formatOrderError(error)); return; }
-    const resolvedStatus = orderStatus ?? 'payment_pending';
-    const isPendingPayment = paymentStatus === 'pending' || resolvedStatus === 'payment_pending';
-    setLastOrder({
-      orderNumber: orderNumber ?? '—',
-      storeName: selectedStore.name,
-      status: resolvedStatus,
-      pointsEarned: pointsEarned ?? 0,
-      total: total ?? displayTotal,
-      billingType,
-      benefitTitle,
-      paymentPending: isPendingPayment,
-      paymentMethod: payment,
-    });
-    clearCart();
-    if (isPendingPayment && payment !== 'cash') {
-      showToast('Sipariş oluşturuldu. Ödeme sağlayıcısı henüz yapılandırılmadı — ödeme onayı bekleniyor.');
-    } else if (isPendingPayment) {
-      showToast('Sipariş oluşturuldu. Mağazada ödeme yapabilirsiniz.');
-    } else {
-      showToast('Sipariş alındı! Puan kazanıyorsun…');
+    if (payment === 'card') {
+      if (!cardHolderName.trim() || cardNumber.replace(/\s/g, '').length < 12
+        || !cardExpireMonth.trim() || !cardExpireYear.trim() || cardCvc.length < 3) {
+        showToast('Kart bilgilerini eksiksiz girin');
+        return;
+      }
     }
-    openSheet('tracking');
+    placingLockRef.current = true;
+    setPlacing(true);
+    try {
+      const { error, orderNumber, pointsEarned, total, billingType, benefitTitle, paymentStatus, orderStatus } = await createOrder({
+        items: orderItems,
+        total: displayTotal,
+        storeId: selectedStore.id,
+        storeName: selectedStore.name,
+        orderType,
+        paymentMethod: payment,
+        couponCode: couponCode.trim() || null,
+        benefitType: selectedBenefit?.type ?? null,
+        benefitId: selectedBenefit?.id ?? null,
+      });
+      if (error) {
+        showToast('Sipariş başarısız: ' + formatOrderError(error));
+        return;
+      }
+      const resolvedStatus = orderStatus ?? 'payment_pending';
+      const isPendingPayment = paymentStatus === 'pending' || resolvedStatus === 'payment_pending';
+      setLastOrder({
+        orderNumber: orderNumber ?? '—',
+        storeName: selectedStore.name,
+        status: resolvedStatus,
+        pointsEarned: isPendingPayment ? 0 : (pointsEarned ?? 0),
+        total: total ?? displayTotal,
+        billingType,
+        benefitTitle,
+        paymentPending: isPendingPayment,
+        paymentMethod: payment,
+      });
+      clearCart();
+      if (isPendingPayment && payment === 'card' && orderNumber) {
+        const pay = await initiateRetailPayment(orderNumber, {
+          cardHolderName: cardHolderName.trim(),
+          cardNumber: cardNumber.replace(/\s/g, ''),
+          expireMonth: cardExpireMonth.trim(),
+          expireYear: cardExpireYear.trim(),
+          cvc: cardCvc.trim(),
+        });
+        if (pay.error) {
+          showToast('Sipariş oluşturuldu. Ödeme başlatılamadı — sipariş takibinden tekrar deneyebilirsiniz.');
+        } else if (pay.threeDSPageUrl) {
+          showToast('3D Secure doğrulamasına yönlendiriliyorsunuz…');
+          if (Platform.OS === 'web' && typeof globalThis.window !== 'undefined') {
+            globalThis.window.open(pay.threeDSPageUrl, '_blank', 'noopener,noreferrer');
+          } else {
+            await WebBrowser.openBrowserAsync(pay.threeDSPageUrl, {
+              dismissButtonStyle: 'close',
+              showInRecents: true,
+            });
+          }
+        }
+      } else if (isPendingPayment && payment !== 'cash') {
+        showToast('Sipariş oluşturuldu. Ödeme onayı bekleniyor.');
+      } else if (isPendingPayment) {
+        showToast('Sipariş oluşturuldu. Mağazada ödeme yapabilirsiniz.');
+      } else {
+        showToast('Sipariş alındı! Puan kazanıyorsun…');
+      }
+      openSheet('tracking');
+    } finally {
+      placingLockRef.current = false;
+      setPlacing(false);
+    }
   };
 
   const SelectCard = ({ selected, onPress, children }: { selected: boolean; onPress: () => void; children: React.ReactNode }) => (
@@ -307,11 +364,7 @@ export function CheckoutSheet() {
 
       <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2.5">Ödeme yöntemi</Text>
       <View className="gap-2 mb-5">
-        {[
-          { id: 'card', label: 'Kredi/Banka Kartı', detail: 'Güvenli ödeme' },
-          { id: 'wallet', label: 'Espresso X Cüzdan', detail: 'Mağaza kredisi' },
-          { id: 'cash', label: 'Nakit', detail: 'Mağazada öde' },
-        ].map(pm => (
+        {PAYMENT_METHODS.map(pm => (
           <SelectCard key={pm.id} selected={payment === pm.id} onPress={() => setPayment(pm.id)}>
             <CreditCard size={18} color={payment === pm.id ? '#C8102E' : '#9494A0'} />
             <View className="flex-1">
@@ -322,6 +375,69 @@ export function CheckoutSheet() {
           </SelectCard>
         ))}
       </View>
+
+      {payment === 'card' && (
+        <View className="mb-5 gap-2">
+          <Text className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-1">Kart bilgileri</Text>
+          <View className="px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+            <RNTextInput
+              value={cardHolderName}
+              onChangeText={setCardHolderName}
+              placeholder="Kart üzerindeki isim"
+              placeholderTextColor="#9494A0"
+              autoCapitalize="words"
+              className="text-sm text-ink-900"
+            />
+          </View>
+          <View className="px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+            <RNTextInput
+              value={cardNumber}
+              onChangeText={setCardNumber}
+              placeholder="Kart numarası"
+              placeholderTextColor="#9494A0"
+              keyboardType="number-pad"
+              maxLength={19}
+              className="text-sm text-ink-900"
+            />
+          </View>
+          <View className="flex-row gap-2">
+            <View className="flex-1 px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+              <RNTextInput
+                value={cardExpireMonth}
+                onChangeText={setCardExpireMonth}
+                placeholder="AA"
+                placeholderTextColor="#9494A0"
+                keyboardType="number-pad"
+                maxLength={2}
+                className="text-sm text-ink-900"
+              />
+            </View>
+            <View className="flex-1 px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+              <RNTextInput
+                value={cardExpireYear}
+                onChangeText={setCardExpireYear}
+                placeholder="YY"
+                placeholderTextColor="#9494A0"
+                keyboardType="number-pad"
+                maxLength={4}
+                className="text-sm text-ink-900"
+              />
+            </View>
+            <View className="flex-1 px-4 py-3 rounded-2xl border border-ink-100 bg-white">
+              <RNTextInput
+                value={cardCvc}
+                onChangeText={setCardCvc}
+                placeholder="CVC"
+                placeholderTextColor="#9494A0"
+                keyboardType="number-pad"
+                maxLength={4}
+                secureTextEntry
+                className="text-sm text-ink-900"
+              />
+            </View>
+          </View>
+        </View>
+      )}
 
       <View className="gap-2 mb-5">
         <View className="flex-row justify-between"><Text className="text-sm text-ink-500">Ara toplam</Text><Text className="text-sm text-ink-500">{formatPrice(preview?.subtotal ?? cartTotal)}</Text></View>
@@ -341,6 +457,9 @@ export function CheckoutSheet() {
   );
 }
 
+const TRACKING_TERMINAL = new Set(['picked-up', 'delivered', 'cancelled', 'refunded']);
+const TRACKING_POLL_MS = 12_000;
+
 export function TrackingSheet() {
   const { sheet, closeSheet, lastOrder, setLastOrder } = useApp();
   const open = sheet === 'tracking';
@@ -349,6 +468,7 @@ export function TrackingSheet() {
 
   useEffect(() => {
     if (!open || !lastOrder?.orderNumber) return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
     const poll = () => {
       void fetchOrderByNumber(lastOrder.orderNumber).then(({ data }) => {
         if (!data) return;
@@ -356,15 +476,23 @@ export function TrackingSheet() {
           orderNumber: data.order_number,
           storeName: data.store_name,
           status: data.status,
-          pointsEarned: data.points_earned,
+          pointsEarned: data.status === 'payment_pending' || data.payment_status === 'pending'
+            ? 0
+            : data.points_earned,
           paymentPending: data.status === 'payment_pending' || data.payment_status === 'pending',
           paymentMethod: lastOrder.paymentMethod,
         });
+        if (TRACKING_TERMINAL.has(data.status) && intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
       });
     };
     poll();
-    const id = setInterval(poll, 8000);
-    return () => clearInterval(id);
+    intervalId = setInterval(poll, TRACKING_POLL_MS);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [open, lastOrder?.orderNumber, lastOrder?.paymentMethod, setLastOrder]);
 
   const statusTitle = paymentPending ? 'Ödeme bekleniyor'
@@ -381,7 +509,7 @@ export function TrackingSheet() {
     { label: 'Sipariş oluşturuldu', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
     { label: 'Ödeme bekleniyor', desc: lastOrder?.paymentMethod === 'cash' ? 'Mağazada öde' : 'Ödeme onayı gerekli', done: false, current: true },
     { label: 'Hazırlanıyor', desc: 'Ödeme sonrası başlayacak', done: false },
-    { label: 'Teslim', desc: lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan` : 'Afiyet olsun!', done: false },
+    { label: 'Teslim', desc: paymentPending ? 'Ödeme sonrası puan yüklenecek' : (lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan` : 'Afiyet olsun!'), done: false },
   ] : [
     { label: 'Sipariş alındı', desc: lastOrder?.storeName ?? 'Mağaza', done: true },
     { label: 'Hazırlanıyor', desc: 'Barista ekibimiz hazırlıyor', done: stepIndex >= 0, current: status === 'preparing' },
@@ -399,7 +527,7 @@ export function TrackingSheet() {
             ? (lastOrder?.paymentMethod === 'cash'
               ? 'Mağazada ödeme yapabilirsiniz'
               : 'Ödeme sağlayıcısı yapılandırılana kadar onay bekleniyor')
-            : lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan kazandın` : 'Siparişin işleniyor'}
+            : (lastOrder?.pointsEarned ? `+${lastOrder.pointsEarned} puan kazandın` : 'Siparişin işleniyor')}
         </Text>
       </View>
 

@@ -1,5 +1,5 @@
 import { View, Text } from 'react-native';
-import { Coffee, Wrench } from 'lucide-react';
+import { Coffee, Wrench, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export function MaintenanceScreen() {
@@ -12,6 +12,27 @@ export function MaintenanceScreen() {
       <Text className="text-sm text-ink-500 mt-2 text-center max-w-sm leading-relaxed">
         Espresso X kısa süreliğine bakımda. En kısa sürede tekrar hizmetinizdeyiz.
       </Text>
+    </View>
+  );
+}
+
+export function ConnectionErrorScreen({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <View className="flex-1 bg-cream-50 items-center justify-center p-8" accessibilityRole="alert">
+      <View className="h-16 w-16 rounded-2xl bg-ex-red/10 items-center justify-center mb-4">
+        <WifiOff size={28} color="#C8102E" />
+      </View>
+      <Text className="text-xl font-bold text-ink-900 text-center font-display">Bağlantı Sorunu</Text>
+      <Text className="text-sm text-ink-500 mt-2 text-center max-w-sm leading-relaxed">{message}</Text>
+      <Button variant="gold" className="mt-6" onPress={onRetry} accessibilityLabel="Tekrar dene">
+        Tekrar Dene
+      </Button>
     </View>
   );
 }

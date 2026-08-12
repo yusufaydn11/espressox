@@ -72,7 +72,7 @@ export async function createOrder(params: CreateOrderParams): Promise<CreateOrde
     p_store_id: params.storeId ?? null,
     p_store_name: params.storeName,
     p_order_type: params.orderType,
-    p_payment_method: params.paymentMethod ?? 'card',
+    p_payment_method: params.paymentMethod ?? 'cash',
     p_coupon_code: params.couponCode ?? null,
     p_benefit_type: params.benefitType ?? null,
     p_benefit_id: params.benefitId ?? null,

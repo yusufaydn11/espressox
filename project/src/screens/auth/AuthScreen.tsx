@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput as RNTextInput, ScrollView } from 'react-native';
+import { View, Text, Pressable, TextInput as RNTextInput, ScrollView, useWindowDimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -10,6 +10,8 @@ type Mode = 'login' | 'signup' | 'forgot' | 'sent';
 
 export function AuthScreen() {
   const { signIn, signUp, resetPassword } = useAuth();
+  const { width } = useWindowDimensions();
+  const showBrandPanel = Platform.OS === 'web' && width >= 768;
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,8 +51,8 @@ export function AuthScreen() {
   };
 
   return (
-    <View className="flex-1 flex-row bg-cream-50">
-      {/* Sol marka paneli */}
+    <View className={cn('flex-1 bg-cream-50', showBrandPanel ? 'flex-row' : '')}>
+      {showBrandPanel ? (
       <LinearGradient
         colors={[colors.ex.red, colors.ex.redDark]}
         className="w-80 shrink-0 justify-center px-10 relative overflow-hidden"
@@ -75,13 +77,21 @@ export function AuthScreen() {
           </View>
         </View>
       </LinearGradient>
+      ) : (
+        <View className="items-center pt-14 pb-2">
+          <View className="h-14 w-14 rounded-2xl bg-ex-red items-center justify-center mb-2">
+            <Text className="text-2xl font-extrabold text-white font-display">X</Text>
+          </View>
+          <Text className="text-lg font-bold text-ink-900 font-display">Espresso X</Text>
+        </View>
+      )}
 
-      {/* Sağ form */}
+      {/* Form */}
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerClassName="flex-grow justify-center px-10 py-12"
+        contentContainerClassName={cn('flex-grow justify-center py-12', showBrandPanel ? 'px-10' : 'px-5')}
       >
         <View className="bg-white rounded-[1.75rem] p-7 shadow-premium max-w-md w-full self-center border border-cream-200">
           <Text className="text-xl font-bold text-ink-900 font-display">{titles[mode]}</Text>

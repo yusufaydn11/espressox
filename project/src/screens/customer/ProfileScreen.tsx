@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
+import Constants from 'expo-constants';
 import {
   Heart, Receipt, CreditCard, MapPin, FileText, Crown, Zap,
   Bell, Inbox, Globe, ChevronRight, Settings, LogOut, Wallet, Gift, Camera,
@@ -195,7 +196,7 @@ export function ProfileScreen() {
         <View className="h-7 w-7 rounded-lg bg-ex-red items-center justify-center shadow-red">
           <Text className="text-xs font-bold text-white leading-none">X</Text>
         </View>
-        <Text className="text-xs text-ink-300">Espresso X · v2.0 · Kahvenin Sanatı</Text>
+        <Text className="text-xs text-ink-300">Espresso X · v{Constants.expoConfig?.version ?? '1.0.0'} · Kahvenin Sanatı</Text>
       </View>
 
       <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Profili Düzenle">

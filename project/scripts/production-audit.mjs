@@ -49,6 +49,7 @@ async function main() {
   audit('Migration', 'order_status_history RLS', existsSync(resolve(migDir, '20260729270200_order_status_history_rls.sql.sql')) ? 'PASS' : 'FAIL');
   audit('Migration', 'SECURITY DEFINER hardening', existsSync(resolve(migDir, '20260729270300_production_definer_and_rls.sql.sql')) ? 'PASS' : 'FAIL');
   audit('Migration', 'Payment security hardening', existsSync(resolve(migDir, '20260729270400_payment_security_hardening.sql.sql')) ? 'PASS' : 'FAIL');
+  audit('Migration', 'Retail iyzico infrastructure (repo)', existsSync(resolve(migDir, '20260729270500_retail_iyzico_payment_infrastructure.sql.sql')) ? 'PASS' : 'FAIL', 'file present; not deployed');
   audit('Migration', 'Chronological order', migrations.every((f, i) => i === 0 || migrations[i - 1] <= f) ? 'PASS' : 'FAIL');
 
   // ─── Frontend artifacts ───
@@ -59,6 +60,27 @@ async function main() {
   audit('Frontend', 'Email verification gate', fileIncludes('src/App.tsx', 'email_confirmed') || fileIncludes('src/screens/auth/EmailVerificationScreen.tsx', 'EmailVerification') ? 'PASS' : 'FAIL');
   audit('Frontend', 'Addresses service', fileIncludes('src/services/profile/addressService.ts', 'customer_addresses') ? 'PASS' : 'FAIL');
   audit('Frontend', 'Lazy sheet imports', fileIncludes('src/screens/customer/CustomerApp.tsx', 'lazy(') ? 'PASS' : 'FAIL');
+
+  // ─── Store readiness (native) ───
+  audit('Store', 'app.config.js present', existsSync(resolve(root, 'app.config.js')) ? 'PASS' : 'FAIL');
+  audit('Store', 'expo-build-properties plugin', fileIncludes('app.config.js', 'expo-build-properties') ? 'PASS' : 'FAIL');
+  audit('Store', 'Android POST_NOTIFICATIONS', fileIncludes('app.config.js', 'POST_NOTIFICATIONS') ? 'PASS' : 'FAIL');
+  audit('Store', 'Android targetSdk 36', fileIncludes('app.config.js', 'targetSdkVersion: 36') ? 'PASS' : 'FAIL');
+  audit('Store', 'No ATT tracking string', !fileIncludes('app.json', 'NSUserTrackingUsageDescription') ? 'PASS' : 'FAIL');
+  audit('Store', 'Account deletion flow', fileIncludes('src/screens/customer/AccountSettingsSheet.tsx', 'deleteAccount') ? 'PASS' : 'FAIL');
+  audit('Store', 'In-app privacy policy', fileIncludes('src/screens/customer/LegalSheet.tsx', 'PrivacyPolicy') ? 'PASS' : 'FAIL');
+  audit('Store', 'Push token clear on logout', fileIncludes('src/context/AuthContext.tsx', 'clearExpoPushToken') ? 'PASS' : 'FAIL');
+  audit('Store', 'No mock data export success', !fileIncludes('src/screens/customer/AccountSettingsSheet.tsx', 'e-posta adresinize gönderildi') ? 'PASS' : 'FAIL');
+  audit('Store', 'Production supabase env guard', fileIncludes('src/lib/supabase.ts', 'Missing EXPO_PUBLIC_SUPABASE_URL') ? 'PASS' : 'FAIL');
+  audit('Store', 'EAS projectId hook', fileIncludes('app.config.js', 'EAS_PROJECT_ID') ? 'PASS' : 'FAIL');
+  audit('Store', 'Sign in with Apple config', fileIncludes('app.config.js', 'usesAppleSignIn') ? 'PASS' : 'FAIL');
+  audit('Store', 'Production staging URL guard', fileIncludes('app.config.js', 'STAGING_PROJECT_REF') ? 'PASS' : 'FAIL');
+  audit('Store', 'Card payments production lock', fileIncludes('eas.json', 'EXPO_PUBLIC_ENABLE_CARD_PAYMENTS') ? 'PASS' : 'FAIL');
+  audit('Store', 'Production env validator script', existsSync(resolve(root, 'scripts/validate-production-env.mjs')) ? 'PASS' : 'FAIL');
+  audit('Store', 'Account deletion anonymization migration', existsSync(resolve(migDir, '20260729270600_account_deletion_anonymization.sql.sql')) ? 'PASS' : 'FAIL', 'not deployed until db push');
+  audit('Store', 'delete-user calls anonymization RPC', fileIncludes('supabase/functions/delete-user/index.ts', 'prepare_user_account_deletion') ? 'PASS' : 'FAIL');
+  audit('Store', 'Store release RLS migration', existsSync(resolve(migDir, '20260729270700_store_release_rls_hardening.sql.sql')) ? 'PASS' : 'FAIL', 'not deployed until db push');
+  audit('Store', 'Support entry in profile', fileIncludes('src/screens/customer/LegalSheet.tsx', 'SupportEntryButton') ? 'PASS' : 'FAIL');
 
   // ─── Build / lint / typecheck ───
   try {
@@ -145,6 +167,13 @@ async function main() {
   // RLS policies exist (indirect: customer can read own order history after order)
   audit('RLS', 'order_status_history policies', existsSync(resolve(migDir, '20260729270200_order_status_history_rls.sql.sql')) ? 'PASS' : 'FAIL');
 
+  // FAZ 1 iyzico — repo ready, runtime blocked until merchant agreement
+  audit('FAZ1 iyzico', 'Edge function retail-payment-initiate (repo)', existsSync(resolve(root, 'supabase/functions/retail-payment-initiate/index.ts')) ? 'PASS' : 'FAIL', 'code only');
+  audit('FAZ1 iyzico', 'Edge function retail-payment-webhook (repo)', existsSync(resolve(root, 'supabase/functions/retail-payment-webhook/index.ts')) ? 'PASS' : 'FAIL', 'code only');
+  audit('FAZ1 iyzico', 'payment_intents table (staging)', 'BLOCKED', 'migration 70500 not pushed');
+  audit('FAZ1 iyzico', 'sandbox 3DS E2E payment flow', 'BLOCKED', 'IYZICO keys / merchant agreement pending');
+  audit('FAZ1 iyzico', 'iyzico webhook signature (live)', 'BLOCKED', 'webhook not configured on staging');
+
   printReport();
   const fail = rows.filter(r => r.status === 'FAIL').length;
   process.exit(fail > 0 ? 1 : 0);
@@ -153,14 +182,16 @@ async function main() {
 function printReport() {
   const pass = rows.filter(r => r.status === 'PASS').length;
   const fail = rows.filter(r => r.status === 'FAIL').length;
+  const blocked = rows.filter(r => r.status === 'BLOCKED').length;
+  const scored = rows.filter(r => r.status !== 'BLOCKED');
   console.log('| Area | Check | Status | Note |');
   console.log('|------|-------|--------|------|');
   for (const r of rows) {
     console.log(`| ${r.area} | ${r.check} | **${r.status}** | ${r.note} |`);
   }
-  const score = rows.length ? Math.round((pass / rows.length) * 100) : 0;
-  console.log(`\n**Production Readiness Score: ${score}/100**`);
-  console.log(`PASS: ${pass} | FAIL: ${fail} | Total: ${rows.length}`);
+  const score = scored.length ? Math.round((pass / scored.length) * 100) : 0;
+  console.log(`\n**Production Readiness Score: ${score}/100** (excludes ${blocked} BLOCKED iyzico checks)`);
+  console.log(`PASS: ${pass} | FAIL: ${fail} | BLOCKED: ${blocked} | Total: ${rows.length}`);
   console.log(`\nCanlıya çıkabilir mi? ${fail === 0 ? 'EVET (pilot)' : score >= 90 ? 'EVET (pilot — minor gaps)' : 'HAYIR'}`);
   if (fail > 0) {
     console.log('\nBlockers:');

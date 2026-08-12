@@ -7,18 +7,30 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_CARD_PAYMENTS": "false"
+      },
       "ios": {
         "simulator": true
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_CARD_PAYMENTS": "false",
+        "EXPO_PUBLIC_MAINTENANCE_MODE": "false"
+      },
       "ios": {
         "simulator": false
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_MAINTENANCE_MODE": "false",
+        "EXPO_PUBLIC_ENABLE_CARD_PAYMENTS": "false"
+      }
     }
   },
   "submit": {

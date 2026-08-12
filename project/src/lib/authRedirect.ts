@@ -9,6 +9,16 @@ export function getPasswordResetRedirectUrl(): string {
   return Linking.createURL('reset');
 }
 
+/** URL hash veya query'deki recovery token kaynağını döndürür */
+export function extractRecoveryTokenSource(url: string): string {
+  if (!url.includes('access_token')) return '';
+  const hashPart = url.includes('#') ? url.split('#')[1] ?? '' : '';
+  if (hashPart.includes('access_token')) return hashPart;
+  const queryPart = url.includes('?') ? url.split('?').slice(1).join('?') : '';
+  if (queryPart.includes('access_token')) return queryPart;
+  return '';
+}
+
 /** URL hash veya query'deki recovery token'ını oturuma çevirir */
 export async function applyRecoveryHash(
   hash: string,

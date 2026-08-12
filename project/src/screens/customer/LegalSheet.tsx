@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Shield, FileText, ChevronRight } from 'lucide-react';
+import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
+import { Shield, FileText, ChevronRight, LifeBuoy } from 'lucide-react';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/utils';
+import { PRIVACY_POLICY_URL, TERMS_URL, SUPPORT_URL, supportMailtoUrl } from '@shared/constants/support';
 
 type LegalTab = 'privacy' | 'terms';
 
@@ -29,7 +30,7 @@ export function LegalEntryButtons({ onOpen: _onOpen }: { onOpen?: (t: LegalTab) 
       </Pressable>
       <Pressable
         onPress={() => setTab('terms')}
-        className="flex-row items-center gap-3 px-4 py-3.5 active:bg-ink-50"
+        className="flex-row items-center gap-3 px-4 py-3.5 border-b border-ink-100 active:bg-ink-50"
       >
         <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
           <FileText size={17} color="#525258" />
@@ -37,6 +38,7 @@ export function LegalEntryButtons({ onOpen: _onOpen }: { onOpen?: (t: LegalTab) 
         <Text className="flex-1 text-sm font-medium text-ink-900">Kullanım Şartları</Text>
         <ChevronRight size={16} color="#C4C4CC" />
       </Pressable>
+      <SupportEntryButton />
     </>
   );
 }
@@ -59,9 +61,61 @@ function Bullet({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ExternalPolicyLinks() {
+  const privacyUrl = PRIVACY_POLICY_URL;
+  const termsUrl = TERMS_URL;
+  const supportUrl = SUPPORT_URL;
+
+  if (!privacyUrl && !termsUrl && !supportUrl) return null;
+
+  return (
+    <View className="mb-4 gap-2">
+      {privacyUrl ? (
+        <Pressable onPress={() => void Linking.openURL(privacyUrl)}>
+          <Text className="text-xs text-ex-red font-medium">Gizlilik politikasını web'de görüntüle</Text>
+        </Pressable>
+      ) : null}
+      {termsUrl ? (
+        <Pressable onPress={() => void Linking.openURL(termsUrl)}>
+          <Text className="text-xs text-ex-red font-medium">Kullanım şartlarını web'de görüntüle</Text>
+        </Pressable>
+      ) : null}
+      {supportUrl ? (
+        <Pressable onPress={() => void Linking.openURL(supportUrl)}>
+          <Text className="text-xs text-ex-red font-medium">Destek sayfası</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+export function SupportEntryButton() {
+  const openSupport = () => {
+    if (SUPPORT_URL) {
+      void Linking.openURL(SUPPORT_URL);
+      return;
+    }
+    void Linking.openURL(supportMailtoUrl());
+  };
+
+  return (
+    <Pressable
+      onPress={openSupport}
+      className="flex-row items-center gap-3 px-4 py-3.5 active:bg-ink-50"
+    >
+      <View className="h-9 w-9 rounded-xl bg-cream-100 items-center justify-center shrink-0">
+        <LifeBuoy size={17} color="#525258" />
+      </View>
+      <Text className="flex-1 text-sm font-medium text-ink-900">Destek</Text>
+      <ChevronRight size={16} color="#C4C4CC" />
+    </Pressable>
+  );
+}
+
 function PrivacyPolicy() {
   return (
     <View>
+      <ExternalPolicyLinks />
       <Text className="text-xs text-ink-400 mb-4">Son güncelleme: 24 Temmuz 2026</Text>
 
       <LegalSection title="1. Giriş">
@@ -117,6 +171,7 @@ function PrivacyPolicy() {
 function TermsOfService() {
   return (
     <View>
+      <ExternalPolicyLinks />
       <Text className="text-xs text-ink-400 mb-4">Son güncelleme: 24 Temmuz 2026</Text>
 
       <LegalSection title="1. Kabul">

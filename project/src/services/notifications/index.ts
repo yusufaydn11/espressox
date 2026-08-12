@@ -13,4 +13,4 @@ export {
 } from './notificationService';
 
 export type { B2BNotification, BulkNotificationInsert } from './notificationService';
-export { saveExpoPushToken } from './pushService';
+export { saveExpoPushToken, clearExpoPushToken } from './pushService';

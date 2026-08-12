@@ -1,5 +1,21 @@
 import { supabase } from '@/lib/supabase';
 import type { CreateOrderItem } from '@/services/orders/orderService';
+import { buildRetailPaymentInitiateUrl } from '@shared/utils/retailPayments';
+
+export type PaymentCardInput = {
+  cardHolderName: string;
+  cardNumber: string;
+  expireMonth: string;
+  expireYear: string;
+  cvc: string;
+};
+
+export type RetailPaymentInitResult = {
+  paymentIntentId?: string;
+  sessionToken?: string;
+  threeDSPageUrl?: string;
+  error: string | null;
+};
 
 export type CheckoutBenefit = {
   type: string;
@@ -98,6 +114,45 @@ export async function confirmCashPayment(
   if (error) return { error: error.message };
   const r = data as { error?: string | null };
   return { error: r.error ?? null };
+}
+
+/** Start iyzico 3DS payment for a payment_pending order (FAZ 1 — server sets amount). */
+export async function initiateRetailPayment(
+  orderNumber: string,
+  paymentCard: PaymentCardInput,
+): Promise<RetailPaymentInitResult> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return { error: 'unauthenticated' };
+
+    const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+    const res = await fetch(buildRetailPaymentInitiateUrl(baseUrl), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+      },
+      body: JSON.stringify({
+        order_number: orderNumber,
+        payment_card: paymentCard,
+      }),
+    });
+
+    const data = await res.json() as Record<string, unknown>;
+    if (!res.ok || data.error) {
+      return { error: String(data.error ?? data.detail ?? `payment_init_failed_${res.status}`) };
+    }
+
+    return {
+      paymentIntentId: data.payment_intent_id as string | undefined,
+      sessionToken: data.session_token as string | undefined,
+      threeDSPageUrl: data.three_ds_page_url as string | undefined,
+      error: null,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'payment_init_failed' };
+  }
 }
 
 export async function advanceOrderStatus(

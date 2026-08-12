@@ -5,7 +5,7 @@ import * as Linking from 'expo-linking';
 import { CheckCircle2 } from 'lucide-react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { AdminPreviewBanner } from '@/components/AdminPreviewBanner';
-import { MaintenanceScreen } from '@/components/SystemScreens';
+import { MaintenanceScreen, ConnectionErrorScreen } from '@/components/SystemScreens';
 import { AdminProvider } from '@/context/AdminContext';
 import { AdminToastProvider, useAdminToast } from '@/context/AdminToastContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -18,7 +18,7 @@ import { EmailVerificationScreen } from '@/screens/auth/EmailVerificationScreen'
 import { Toast } from '@/components/ui/Toast';
 import { PasswordResetSheet } from '@/screens/customer/PasswordResetSheet';
 import { supabase } from '@/lib/supabase';
-import { applyRecoveryHash } from '@/lib/authRedirect';
+import { applyRecoveryHash, extractRecoveryTokenSource } from '@/lib/authRedirect';
 import { usePushNotifications } from '@/lib/notifications';
 import { colors } from '@shared/design/tokens';
 
@@ -58,10 +58,15 @@ function MobileRecoveryHandler() {
     if (Platform.OS === 'web') return;
 
     const handleUrl = async (url: string) => {
-      if (!url.includes('access_token') && !url.includes('reset')) return;
-      const hash = url.includes('#') ? url.split('#')[1] ?? '' : '';
-      if (!hash.includes('access_token')) return;
-      const ok = await applyRecoveryHash(hash, async (accessToken, refreshToken) => {
+      const tokenSource = extractRecoveryTokenSource(url);
+      if (!tokenSource) return;
+
+      const { data: { session: existing } } = await supabase.auth.getSession();
+      if (existing?.user) {
+        await supabase.auth.signOut();
+      }
+
+      const ok = await applyRecoveryHash(tokenSource, async (accessToken, refreshToken) => {
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       });
       if (ok) handledRef.current = true;
@@ -82,7 +87,7 @@ function PasswordResetOverlay() {
 }
 
 function Shell() {
-  const { user, loading, isAdmin, isFranchise, isStoreManager, isStaff, profile, pendingPasswordReset, isInternal } = useAuth();
+  const { user, loading, bootstrapError, retryBootstrap, isAdmin, isFranchise, isStoreManager, isStaff, profile, pendingPasswordReset, isInternal } = useAuth();
   const { previewAsCustomer } = useApp();
 
   usePushNotifications();
@@ -92,6 +97,15 @@ function Shell() {
   }
 
   if (loading) return <LoadingScreen />;
+
+  if (bootstrapError) {
+    return (
+      <>
+        <ConnectionErrorScreen message={bootstrapError} onRetry={retryBootstrap} />
+        <Toast />
+      </>
+    );
+  }
 
   // E-posta linkinden gelen şifre sıfırlama — giriş ekranına atma
   if (pendingPasswordReset && user) {

@@ -22,6 +22,11 @@ dist-ssr
 *.sw?
 .env
 
+google-services.json
+dist-new/
+dist-v3/
+credentials/
+
 admin-web/.env.production
 
 supabase/.temp/

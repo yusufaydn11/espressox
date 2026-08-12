@@ -233,6 +233,8 @@ export function AdminScanner() {
                 </Text>
                 <Pressable
                   onPress={() => requestCamPerm()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kamera izni ver"
                   className="mt-4 flex-row items-center gap-2 px-4 py-2.5 rounded-xl bg-ex-red active:bg-ex-redDark"
                 >
                   <Camera size={16} color="#fff" />
@@ -268,7 +270,7 @@ export function AdminScanner() {
             )}
 
             {status === 'processing' && (
-              <View className="absolute inset-0 bg-ink-950/70 items-center justify-center">
+              <View className="absolute inset-0 bg-ink-950/70 items-center justify-center" accessibilityLiveRegion="polite" accessibilityLabel="QR kod işleniyor">
                 <View className="items-center">
                   <Loader2 size={32} color="#fff" />
                   <Text className="text-sm text-white font-medium mt-3">İşleniyor…</Text>

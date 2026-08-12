@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
+import { SUPPORT_EMAIL } from '@shared/constants/support';
 
-type Phase = 'menu' | 'confirm-delete' | 'deleting' | 'deleted' | 'exporting' | 'exported';
+type Phase = 'menu' | 'confirm-delete' | 'deleting' | 'deleted';
 
 export function AccountSettingsSheet() {
   const { sheet, closeSheet, showToast } = useApp();
@@ -29,9 +30,8 @@ export function AccountSettingsSheet() {
     setPhase('deleted');
   };
 
-  const handleExport = () => {
-    setPhase('exporting');
-    setTimeout(() => { setPhase('exported'); showToast('Verileriniz hazırlandı'); }, 1800);
+  const handleExportRequest = () => {
+    showToast(`Veri indirme talebi için ${SUPPORT_EMAIL} adresine yazın`);
   };
 
   const reset = () => {
@@ -47,7 +47,7 @@ export function AccountSettingsSheet() {
             <View className="flex-row items-start gap-2 p-3 rounded-xl bg-cream-100">
               <Shield size={15} color="#C8102E" />
               <Text className="text-[11px] text-ink-400 leading-relaxed flex-1">
-                KVKK ve GDPR kapsamında verilerinizi yönetin. Hesabınızı sildiğinizde tüm kişisel verileriniz 30 gün içinde kalıcı olarak silinir.
+                KVKK ve GDPR kapsamında verilerinizi yönetin. Hesabınızı sildiğinizde kişisel bilgileriniz kaldırılır; yasal saklama gerektiren sipariş kayıtları anonim olarak tutulabilir.
               </Text>
             </View>
 
@@ -58,10 +58,10 @@ export function AccountSettingsSheet() {
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-ink-900">Verilerimi indir</Text>
-                  <Text className="text-[11px] text-ink-400">Tüm hesap verileriniz bir dosya olarak indirilebilir</Text>
+                  <Text className="text-[11px] text-ink-400">KVKK kapsamında veri taşınabilirliği talebi oluşturun</Text>
                 </View>
               </View>
-              <Button variant="outline" full size="sm" onPress={handleExport}><Download size={14} /> Verilerimi indir</Button>
+              <Button variant="outline" full size="sm" onPress={handleExportRequest}><Download size={14} /> Talep oluştur</Button>
             </Card>
 
             <Card className="p-4 border-ex-red/20">
@@ -89,27 +89,6 @@ export function AccountSettingsSheet() {
           </View>
         )}
 
-        {phase === 'exporting' && (
-          <View className="py-12 items-center">
-            <View className="h-16 w-16 rounded-3xl bg-ex-red items-center justify-center mb-4">
-              <ActivityIndicator size="large" color="#fff" />
-            </View>
-            <Text className="text-lg font-semibold text-ink-900">Verileriniz hazırlanıyor…</Text>
-            <Text className="text-sm text-ink-400 mt-1">Lütfen bekleyin</Text>
-          </View>
-        )}
-
-        {phase === 'exported' && (
-          <View className="py-12 items-center">
-            <View className="h-16 w-16 rounded-3xl bg-green-100 items-center justify-center mb-4">
-              <CheckCircle2 size={28} color="#16a34a" />
-            </View>
-            <Text className="text-lg font-semibold text-ink-900">Verileriniz hazır</Text>
-            <Text className="text-sm text-ink-400 mt-1 mb-5">Veri dosyanız e-posta adresinize gönderildi</Text>
-            <Button variant="gold" onPress={() => setPhase('menu')}>Geri dön</Button>
-          </View>
-        )}
-
         {phase === 'deleting' && (
           <View className="py-12 items-center">
             <View className="h-16 w-16 rounded-3xl bg-red-100 items-center justify-center mb-4">
@@ -126,7 +105,7 @@ export function AccountSettingsSheet() {
               <CheckCircle2 size={28} color="#16a34a" />
             </View>
             <Text className="text-lg font-semibold text-ink-900">Hesabınız silindi</Text>
-            <Text className="text-sm text-ink-400 mt-1 mb-5">Verileriniz 30 gün içinde tamamen silinecek. Görüşmek üzere!</Text>
+            <Text className="text-sm text-ink-400 mt-1 mb-5">Kişisel verileriniz kaldırıldı. Sipariş kayıtları yasal yükümlülükler kapsamında anonim saklanabilir.</Text>
             <Button variant="gold" onPress={reset}>Tamam</Button>
           </View>
         )}

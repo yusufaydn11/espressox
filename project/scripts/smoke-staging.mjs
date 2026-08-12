@@ -51,7 +51,7 @@ const results = [];
 
 function record(role, scenario, status, detail = '') {
   results.push({ role, scenario, status, detail });
-  const icon = status === 'PASS' ? '✓' : status === 'FAIL' ? '✗' : '○';
+  const icon = status === 'PASS' ? '✓' : status === 'FAIL' ? '✗' : status === 'BLOCKED' ? '⊘' : '○';
   console.log(`${icon} [${role}] ${scenario}: ${status}${detail ? ` — ${detail}` : ''}`);
 }
 
@@ -436,6 +436,21 @@ async function superAdminTests(sb) {
   );
 }
 
+async function iyzicoE2eBlocked() {
+  const scenarios = [
+    ['retail payment initiate', 'IYZICO_API_KEY not configured / no merchant agreement'],
+    ['3DS page open', 'retail-payment-initiate not deployed'],
+    ['iyzico callback handling', 'retail-payment-webhook not deployed'],
+    ['paymentId ↔ payment_intent match', 'payment_intents migration not on staging'],
+    ['paidPrice ↔ DB amount (live)', 'requires sandbox 3DS E2E'],
+    ['duplicate callback idempotency (live)', 'requires sandbox 3DS E2E'],
+    ['failed 3DS does not mark paid (live)', 'requires sandbox 3DS E2E'],
+  ];
+  for (const [scenario, detail] of scenarios) {
+    record('iyzico', scenario, 'BLOCKED', detail);
+  }
+}
+
 async function main() {
   console.log(`\nStaging smoke tests → ${url}\n`);
 
@@ -448,10 +463,13 @@ async function main() {
   await testRole('admin', 'SMOKE_ADMIN_EMAIL', 'SMOKE_ADMIN_PASSWORD', (sb, s) => adminTests(sb, s));
   await testRole('super_admin', 'SMOKE_SUPER_ADMIN_EMAIL', 'SMOKE_SUPER_ADMIN_PASSWORD', (sb) => superAdminTests(sb));
 
+  await iyzicoE2eBlocked();
+
   const pass = results.filter(r => r.status === 'PASS').length;
   const fail = results.filter(r => r.status === 'FAIL').length;
   const skip = results.filter(r => r.status === 'NOT TESTED').length;
-  console.log(`\nSummary: ${pass} PASS, ${fail} FAIL, ${skip} NOT TESTED (${results.length} total)\n`);
+  const blocked = results.filter(r => r.status === 'BLOCKED').length;
+  console.log(`\nSummary: ${pass} PASS, ${fail} FAIL, ${skip} NOT TESTED, ${blocked} BLOCKED (${results.length} total)\n`);
   process.exit(fail > 0 ? 1 : 0);
 }
 

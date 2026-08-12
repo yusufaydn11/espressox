@@ -5,7 +5,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+if (!supabaseUrl || !supabaseAnonKey) {
+  const msg = 'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY';
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.warn(`[supabase] ${msg}`);
+  } else {
+    throw new Error(msg);
+  }
+}
+
+export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   auth: {
     storage: AsyncStorage,
     persistSession: true,

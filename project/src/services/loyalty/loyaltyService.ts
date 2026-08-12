@@ -89,15 +89,8 @@ export async function fetchQrCode(
     .maybeSingle();
   if (error) return { data: null, error: error.message };
   if (data) return { data: data as QrCodeRow, error: null };
-
-  const code = `EX-${userId.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-  const { data: created, error: insErr } = await supabase
-    .from('qr_codes')
-    .insert({ user_id: userId, code })
-    .select('*')
-    .maybeSingle();
-  if (insErr) return { data: null, error: insErr.message };
-  return { data: created as QrCodeRow, error: null };
+  // QR is created server-side on signup (handle_new_user). Never client-insert.
+  return { data: null, error: 'qr_not_found' };
 }
 
 export async function fetchQrScans(
@@ -177,7 +170,13 @@ export async function lookupQrByCode(
     p_store_id: storeId ?? null,
   });
 
-  if (!rpcError && rpcData && typeof rpcData === 'object') {
+  if (rpcError) {
+    const fnMissing = rpcError.code === '42883'
+      || /could not find the function/i.test(rpcError.message ?? '');
+    if (!fnMissing) {
+      return { data: null, error: rpcError.message };
+    }
+  } else if (rpcData && typeof rpcData === 'object') {
     const payload = rpcData as { error?: string | null; id?: string; user_id?: string; code?: string };
     if (payload.error) {
       return { data: null, error: payload.error };
@@ -196,15 +195,7 @@ export async function lookupQrByCode(
     }
   }
 
-  // Fallback if RPC not deployed yet
-  const { data, error } = await supabase
-    .from('qr_codes')
-    .select('*')
-    .eq('code', code)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (error) return { data: null, error: error.message };
-  return { data: data as QrCodeRow | null, error: null };
+  return { data: null, error: 'qr_lookup_unavailable' };
 }
 
 export type QrScanRpcResult = {

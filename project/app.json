@@ -2,6 +2,7 @@
   "expo": {
     "name": "Espresso X",
     "slug": "espresso-x",
+    "scheme": "espressox",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,7 +12,6 @@
       "resizeMode": "cover",
       "backgroundColor": "#F8F6F3"
     },
-    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.espressox.app",
@@ -19,8 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Kampanya ve ödül QR kodlarını okumak için kamera izni gerekir.",
         "NSLocationWhenInUseUsageDescription": "Size en yakın Espresso X mağazalarını göstermek için konum bilgisi kullanılır.",
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSUserTrackingUsageDescription": "Bu izin, kampanya performansını ölçmek için kullanılır."
+        "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": ["applinks:espressox.app"],
       "config": {
@@ -40,7 +39,6 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ],
-      "googleServicesFile": "google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",

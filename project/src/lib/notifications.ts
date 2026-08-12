@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Constants from 'expo-constants';
 import { resolvePushNotificationOrderId } from '@shared/constants/notifications';
-import { saveExpoPushToken } from '@/services/notifications';
+import { saveExpoPushToken, clearExpoPushToken } from '@/services/notifications';
 import { useAuth } from '@/context/AuthContext';
 
 Notifications.setNotificationHandler({
@@ -31,6 +31,7 @@ export function usePushNotifications() {
   const { user } = useAuth();
   const tokenRef = useRef<string | null>(null);
   const handledColdStartRef = useRef(false);
+  const prevUserIdRef = useRef<string | null>(null);
 
   const register = useCallback(async () => {
     if (Platform.OS === 'web') return;
@@ -46,7 +47,12 @@ export function usePushNotifications() {
     if (finalStatus !== 'granted') return;
 
     const projectId = (Constants as unknown as { expoConfig?: { extra?: { eas?: { projectId?: string } } } }).expoConfig?.extra?.eas?.projectId;
-    if (!projectId) return;
+    if (!projectId) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[push] EAS projectId missing — push token registration skipped');
+      }
+      return;
+    }
 
     const token = (await Notifications.getExpoPushTokenAsync({
       projectId,
@@ -55,6 +61,10 @@ export function usePushNotifications() {
     tokenRef.current = token;
 
     if (user) {
+      if (prevUserIdRef.current && prevUserIdRef.current !== user.id) {
+        await clearExpoPushToken(prevUserIdRef.current);
+      }
+      prevUserIdRef.current = user.id;
       await saveExpoPushToken(user.id, token);
     }
 
@@ -69,9 +79,11 @@ export function usePushNotifications() {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
-      void register();
+    if (!user) {
+      prevUserIdRef.current = null;
+      return;
     }
+    void register();
   }, [user, register]);
 
   useEffect(() => {
