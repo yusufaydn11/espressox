@@ -146,6 +146,7 @@ export type OrderRow = {
   discount_amount?: number;
   points_earned: number;
   points_spent?: number;
+  points_credited?: boolean;
   billing_type?: string;
   reward_id?: string | null;
   coupon_id?: string | null;

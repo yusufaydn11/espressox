@@ -343,6 +343,7 @@ export function FranchiseApp() {
               storeId={storeId}
               readOnly={role === 'staff'}
               highlightOrderNumber={highlightOrderNumber}
+              showToast={showToast}
             />
           )}
           {page === 'scanner' && <AdminScanner />}
@@ -468,14 +469,32 @@ function FranchiseDashboard({ storeId, storeName, onGoOrders }: { storeId: strin
   );
 }
 
+const ORDER_ACTION_ERRORS: Record<string, string> = {
+  order_not_found: 'Sipariş bulunamadı',
+  unauthorized: 'Bu işlem için yetkiniz yok',
+  unauthenticated: 'Oturum geçersiz',
+  invalid_status: 'Geçersiz sipariş durumu',
+  status_update_failed: 'Durum güncellenemedi',
+  not_cash_order: 'Nakit olmayan sipariş',
+  order_finalized: 'Sipariş zaten tamamlanmış',
+  payment_not_found: 'Ödeme kaydı bulunamadı',
+};
+
+function formatOrderActionError(code: string | null | undefined): string {
+  if (!code) return 'İşlem başarısız';
+  return ORDER_ACTION_ERRORS[code] ?? code;
+}
+
 function FranchiseOrders({
   storeId,
   readOnly,
   highlightOrderNumber,
+  showToast,
 }: {
   storeId: string | null;
   readOnly?: boolean;
   highlightOrderNumber?: string | null;
+  showToast?: (msg: string) => void;
 }) {
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -540,17 +559,21 @@ function FranchiseOrders({
     setUpdating(order.id);
     if (action.kind === 'confirm_cash') {
       const { error } = await confirmCashPayment(order.id);
-      if (!error) {
+      if (error) {
+        showToast?.(formatOrderActionError(error));
+      } else {
         setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'confirmed', payment_status: 'paid' } : o));
       }
     } else {
       const { error } = await updateOrderStatusByNumber(order.id, action.nextStatus);
-      if (!error) {
+      if (error) {
+        showToast?.(formatOrderActionError(error));
+      } else {
         setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: action.nextStatus } : o));
       }
     }
     setUpdating(null);
-  }, []);
+  }, [showToast]);
 
   const visible = filter === 'active'
     ? orders.filter(o => isFranchiseActiveOrderStatus(o.status))

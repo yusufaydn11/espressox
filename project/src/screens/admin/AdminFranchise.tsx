@@ -9,7 +9,7 @@ import { useAdmin } from '@/context/AdminContext';
 import { supabase, type Store as StoreRow } from '@/lib/supabase';
 import { Card } from '@/components/ui/Card';
 import { Button, ButtonRow } from '@/components/ui/Button';
-import { ConfirmDialog, TextInput, Toggle } from '@/components/ui/Modal';
+import { ConfirmDialog, TextInput, Toggle, Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
 
 type FranchiseUser = {
@@ -17,6 +17,7 @@ type FranchiseUser = {
   role: string;
   storeId: string | null;
   fullName: string;
+  email: string;
   updatedAt: string;
 };
 
@@ -24,6 +25,7 @@ type CreatedCreds = {
   email: string;
   password?: string;
   storeName: string;
+  mode?: 'create' | 'reset';
 };
 
 function mapEdgeError(message: string): string {
@@ -58,6 +60,7 @@ export function AdminFranchise() {
   const [creds, setCreds] = useState<CreatedCreds | null>(null);
   const [copied, setCopied] = useState<'email' | 'pass' | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [resetUser, setResetUser] = useState<FranchiseUser | null>(null);
 
   const callEdge = useCallback(async (payload: Record<string, unknown>) => {
     if (!session?.access_token) {
@@ -223,7 +226,9 @@ export function AdminFranchise() {
               <Check size={24} color="#16a34a" />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-bold text-ink-900">Yetkili oluşturuldu</Text>
+              <Text className="text-base font-bold text-ink-900">
+                {creds.mode === 'reset' ? 'Şifre güncellendi' : 'Yetkili oluşturuldu'}
+              </Text>
               <Text className="text-sm text-ink-500">{creds.storeName} şubesi</Text>
             </View>
             <Pressable onPress={() => setCreds(null)} hitSlop={8}>
@@ -262,20 +267,29 @@ export function AdminFranchise() {
                   <Text className="text-sm font-bold text-ink-900" numberOfLines={1}>{u.fullName || 'İsimsiz'}</Text>
                   <View className="flex-row items-center gap-1 mt-0.5">
                     <Mail size={11} color="#9494A0" />
-                    <Text className="text-xs text-ink-500">Franchise Yetkilisi</Text>
+                    <Text className="text-xs text-ink-500 flex-1" numberOfLines={1}>{u.email || 'E-posta yok'}</Text>
                   </View>
                   <View className="flex-row items-center gap-1 mt-0.5">
                     <MapPin size={11} color="#9494A0" />
                     <Text className="text-xs text-ink-400" numberOfLines={1}>{storeName(u.storeId)}</Text>
                   </View>
                 </View>
-                <Pressable
-                  onPress={() => setConfirmDeleteId(u.userId)}
-                  className="h-8 w-8 rounded-lg items-center justify-center active:bg-red-50"
-                  accessibilityLabel="Sil"
-                >
-                  <Trash2 size={16} color="#9494A0" />
-                </Pressable>
+                <View className="flex-row gap-1 shrink-0">
+                  <Pressable
+                    onPress={() => setResetUser(u)}
+                    className="h-8 w-8 rounded-lg items-center justify-center active:bg-ink-50"
+                    accessibilityLabel="Şifre değiştir"
+                  >
+                    <KeyRound size={16} color="#9494A0" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setConfirmDeleteId(u.userId)}
+                    className="h-8 w-8 rounded-lg items-center justify-center active:bg-red-50"
+                    accessibilityLabel="Sil"
+                  >
+                    <Trash2 size={16} color="#9494A0" />
+                  </Pressable>
+                </View>
               </View>
             </Card>
           ))}
@@ -290,6 +304,26 @@ export function AdminFranchise() {
         message="Bu franchise yetkisini silmek istediğinize emin misiniz? Hesap kalıcı olarak kaldırılır."
         confirmLabel="Sil"
       />
+
+      {resetUser && (
+        <ResetPasswordDialog
+          user={resetUser}
+          onClose={() => setResetUser(null)}
+          callEdge={callEdge}
+          showToast={showToast}
+          onDone={(password) => {
+            setResetUser(null);
+            if (password) {
+              setCreds({
+                email: resetUser.email,
+                password,
+                storeName: storeName(resetUser.storeId),
+                mode: 'reset',
+              });
+            }
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -358,7 +392,7 @@ function CreateFranchiseForm({
       const storeName = (res.storeName as string) ?? '';
       onCreated({
         email: (res.email as string) ?? email,
-        ...(useCustomPass && customPassword.trim() ? { password: customPassword.trim() } : {}),
+        ...((res.password as string | undefined) ? { password: res.password as string } : (useCustomPass && customPassword.trim() ? { password: customPassword.trim() } : {})),
         storeName,
       });
       showToast('Franchise yetkilisi oluşturuldu');
@@ -464,5 +498,81 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Text className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-1.5">{label}</Text>
       {children}
     </View>
+  );
+}
+
+function ResetPasswordDialog({
+  user,
+  onClose,
+  callEdge,
+  showToast,
+  onDone,
+}: {
+  user: FranchiseUser;
+  onClose: () => void;
+  callEdge: (p: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  showToast: (m: string) => void;
+  onDone: (generatedPassword?: string) => void;
+}) {
+  const [customPassword, setCustomPassword] = useState('');
+  const [useCustomPass, setUseCustomPass] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const submit = useCallback(async () => {
+    if (useCustomPass && customPassword.trim().length < 6) {
+      showToast('Şifre en az 6 karakter olmalı');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await callEdge({
+        action: 'reset_password',
+        userId: user.userId,
+        ...(useCustomPass && customPassword.trim() ? { newPassword: customPassword.trim() } : {}),
+      });
+      showToast('Şifre güncellendi');
+      onDone((res.password as string | undefined) ?? (useCustomPass ? customPassword.trim() : undefined));
+    } catch (e) {
+      showToast('Hata: ' + (e instanceof Error ? mapEdgeError(e.message) : 'Bilinmeyen'));
+    }
+    setSaving(false);
+  }, [useCustomPass, customPassword, user.userId, callEdge, showToast, onDone]);
+
+  return (
+    <Modal open title="Şifre değiştir" onClose={onClose}>
+      <Text className="text-sm text-ink-500">{user.fullName || user.email} için yeni giriş şifresi belirleyin.</Text>
+      <View className="gap-3 mt-4">
+        <View className="px-3 py-2 rounded-xl bg-ink-50 border border-ink-100">
+          <Text className="text-[10px] text-ink-400 uppercase tracking-wide">Hesap</Text>
+          <Text className="text-sm font-medium text-ink-900">{user.email}</Text>
+        </View>
+        <Toggle
+          checked={useCustomPass}
+          onChange={setUseCustomPass}
+          label="Kendi şifremi belirle"
+        />
+        {useCustomPass ? (
+          <Field label="Yeni şifre (min 6 karakter)">
+            <TextInput
+              value={customPassword}
+              onChangeText={setCustomPassword}
+              placeholder="••••••••"
+              secureTextEntry
+              autoComplete="new-password"
+            />
+          </Field>
+        ) : (
+          <Text className="text-xs text-ink-500 leading-relaxed">
+            Güçlü bir şifre otomatik üretilir ve güncelleme sonrası gösterilir.
+          </Text>
+        )}
+        <ButtonRow>
+          <Button variant="outline" flex onPress={onClose}>Vazgeç</Button>
+          <Button flex onPress={submit} disabled={saving}>
+            {saving ? <Loader2 size={16} color="#fff" /> : 'Şifreyi güncelle'}
+          </Button>
+        </ButtonRow>
+      </View>
+    </Modal>
   );
 }

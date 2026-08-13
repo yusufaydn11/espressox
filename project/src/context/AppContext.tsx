@@ -1,13 +1,16 @@
 import {
-  createContext, useContext, useState, useEffect, useCallback, type ReactNode,
+  createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode,
 } from 'react';
+import { Platform, AppState as RNAppState } from 'react-native';
 import type { CartItem, Product, ProductOption } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { fetchRecentOrdersForPointsSync } from '@/services/orders/orderService';
 import { fetchEarnRate } from '@/services/loyalty';
 import { DEFAULT_EARN_RATE } from '@shared/constants/loyalty';
 import { computeCartPoints } from '@shared/utils/loyalty';
 import { normalizeToast, type ToastMessage } from '@shared/types/toast';
+import { optionPriceModifier } from '@shared/utils/productOptions';
 
 type Theme = 'light' | 'dark';
 export type Tab = 'home' | 'menu' | 'qr' | 'campaigns' | 'profile';
@@ -35,7 +38,7 @@ interface AppState {
   setTab: (t: Tab) => void;
 
   cart: CartItem[];
-  addToCart: (product: Product, opts: Customization) => void;
+  addToCart: (product: Product, opts: Customization, quantity?: number) => void;
   removeFromCart: (id: string) => void;
   updateQty: (id: string, qty: number) => void;
   clearCart: () => void;
@@ -78,8 +81,29 @@ export interface Customization {
 
 const Ctx = createContext<AppState | null>(null);
 
+const ACTIVE_ORDER_TERMINAL = new Set(['picked-up', 'delivered', 'cancelled', 'refunded', 'completed']);
+const CUSTOMER_POINTS_SYNC_MS = 10_000;
+
+function readSyncedCreditOrders(): Set<string> {
+  if (Platform.OS === 'web' && typeof globalThis.sessionStorage !== 'undefined') {
+    try {
+      const raw = globalThis.sessionStorage.getItem('ex-points-synced');
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* ignore */ }
+  }
+  return new Set();
+}
+
+function persistSyncedCreditOrders(synced: Set<string>) {
+  if (Platform.OS === 'web' && typeof globalThis.sessionStorage !== 'undefined') {
+    try {
+      globalThis.sessionStorage.setItem('ex-points-synced', JSON.stringify([...synced].slice(-30)));
+    } catch { /* ignore */ }
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile, isInternal } = useAuth();
   const [theme, setTheme] = useState<Theme>('light');
   const [previewAsCustomer, setPreviewAsCustomer] = useState(false);
 
@@ -95,8 +119,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(null);
   const [earnRate, setEarnRate] = useState(DEFAULT_EARN_RATE);
+  const syncedCreditOrdersRef = useRef<Set<string>>(readSyncedCreditOrders());
+  const pointsSyncSeededRef = useRef(false);
+  const showToastRef = useRef<(msg: string) => void>(() => {});
 
   const points = profile?.points ?? 0;
+  const isCustomerSession = Boolean(user && (!isInternal || previewAsCustomer));
 
   useEffect(() => {
     void fetchEarnRate().then(setEarnRate);
@@ -108,6 +136,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [profile?.favorite_drinks]);
 
+  useEffect(() => {
+    if (previewAsCustomer && user) void refreshProfile();
+  }, [previewAsCustomer, user, refreshProfile]);
+
+  useEffect(() => {
+    if (!isCustomerSession || !user) return;
+
+    const syncCustomerPoints = () => {
+      void fetchRecentOrdersForPointsSync(user.id).then(({ data: orders }) => {
+        if (!orders?.length) return;
+
+        if (!pointsSyncSeededRef.current) {
+          for (const order of orders) {
+            if (order.points_credited) syncedCreditOrdersRef.current.add(order.order_number);
+          }
+          persistSyncedCreditOrders(syncedCreditOrdersRef.current);
+          pointsSyncSeededRef.current = true;
+        }
+
+        let newlyCreditedOrder: { order_number: string; points_earned: number } | null = null;
+        for (const order of orders) {
+          if (!order.points_credited || !order.points_earned) continue;
+          if (syncedCreditOrdersRef.current.has(order.order_number)) continue;
+          syncedCreditOrdersRef.current.add(order.order_number);
+          newlyCreditedOrder = { order_number: order.order_number, points_earned: order.points_earned };
+        }
+
+        if (newlyCreditedOrder) {
+          persistSyncedCreditOrders(syncedCreditOrdersRef.current);
+          void refreshProfile();
+          showToastRef.current(`+${newlyCreditedOrder.points_earned} puan yüklendi!`);
+        }
+
+        const active = orders.find(o => !ACTIVE_ORDER_TERMINAL.has(o.status));
+        if (active) {
+          const paymentPending = active.status === 'payment_pending' || active.payment_status === 'pending';
+          setLastOrder(prev => ({
+            orderNumber: active.order_number,
+            storeName: active.store_name ?? prev?.storeName ?? '',
+            status: active.status,
+            pointsEarned: paymentPending ? 0 : Number(active.points_earned ?? 0),
+            paymentPending,
+            paymentMethod: prev?.paymentMethod,
+            total: prev?.total,
+          }));
+        }
+      });
+    };
+
+    syncCustomerPoints();
+    const intervalId = setInterval(syncCustomerPoints, CUSTOMER_POINTS_SYNC_MS);
+    return () => clearInterval(intervalId);
+  }, [isCustomerSession, user, refreshProfile]);
+
+  useEffect(() => {
+    if (!isCustomerSession) return;
+
+    if (Platform.OS === 'web' && typeof globalThis.document !== 'undefined') {
+      const onVisible = () => {
+        if (globalThis.document.visibilityState === 'visible') void refreshProfile();
+      };
+      globalThis.document.addEventListener('visibilitychange', onVisible);
+      return () => globalThis.document.removeEventListener('visibilitychange', onVisible);
+    }
+
+    const sub = RNAppState.addEventListener('change', state => {
+      if (state === 'active') void refreshProfile();
+    });
+    return () => sub.remove();
+  }, [isCustomerSession, refreshProfile]);
+
   const toggleTheme = useCallback(() => setTheme(t => (t === 'light' ? 'dark' : 'light')), []);
 
   const showToast = useCallback((msg: string | ToastMessage) => {
@@ -115,17 +214,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToast(null), 2600);
   }, []);
 
-  const addToCart = useCallback((product: Product, opts: Customization) => {
+  showToastRef.current = (msg: string) => showToast(msg);
+
+  const addToCart = useCallback((product: Product, opts: Customization, quantity = 1) => {
     const unitPrice =
-      product.price +
-      opts.size.priceModifier +
-      opts.milk.priceModifier +
-      (opts.syrup?.priceModifier ?? 0) +
-      (opts.topping?.priceModifier ?? 0) +
-      opts.temperature.priceModifier +
+      Number(product.price) +
+      optionPriceModifier(opts.size) +
+      optionPriceModifier(opts.milk) +
+      optionPriceModifier(opts.syrup) +
+      optionPriceModifier(opts.topping) +
+      optionPriceModifier(opts.temperature) +
       opts.extraEspresso * 12;
-    const id = `${product.id}-${Date.now()}`;
-    const item: CartItem = { id, product, ...opts, quantity: 1, unitPrice };
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      showToast('Ürün fiyatı hesaplanamadı. Menüden tekrar deneyin.');
+      return;
+    }
+    const safeQty = Math.max(1, Math.floor(quantity) || 1);
+    const id = `${product.id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const item: CartItem = { id, product, ...opts, quantity: safeQty, unitPrice };
     setCart(c => [...c, item]);
     showToast(`${product.name} sepete eklendi`);
   }, [showToast]);

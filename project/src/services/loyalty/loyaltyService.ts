@@ -2,6 +2,11 @@ import { supabase, type Profile, type Reward, type PointsHistoryRow, type Loyalt
 import { DEFAULT_EARN_RATE, POINTS_PER_STAMP } from '@shared/constants/loyalty';
 import { parseRedeemRpcResult } from '@shared/utils/loyalty';
 import type { RedeemRpcPayload } from '@shared/types/loyalty';
+import { resolveProductImageUrl } from '@shared/constants/products';
+
+function withResolvedRewardImages(rewards: Reward[]): Reward[] {
+  return rewards.map(r => ({ ...r, image: resolveProductImageUrl(r.image) }));
+}
 
 /**
  * Loyalty data access layer. Pure fetch/RPC wrappers — suitable for future
@@ -14,7 +19,7 @@ export async function fetchActiveRewards(): Promise<{ data: Reward[] | null; err
     .select('*')
     .eq('is_active', true);
   if (error) return { data: null, error: error.message };
-  return { data: data as Reward[], error: null };
+  return { data: withResolvedRewardImages(data as Reward[]), error: null };
 }
 
 export async function fetchAllRewards(): Promise<{ data: Reward[] | null; error: string | null }> {
@@ -23,7 +28,7 @@ export async function fetchAllRewards(): Promise<{ data: Reward[] | null; error:
     .select('*')
     .order('points_cost');
   if (error) return { data: null, error: error.message };
-  return { data: data as Reward[], error: null };
+  return { data: withResolvedRewardImages(data as Reward[]), error: null };
 }
 
 export async function createReward(r: Partial<Reward>): Promise<{ error: string | null }> {

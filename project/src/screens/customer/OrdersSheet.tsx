@@ -81,7 +81,14 @@ export function OrdersSheet() {
                 </View>
                 <View className="flex-row items-center justify-between pt-3 border-t border-ink-100">
                   <View className="flex-1 pr-2">
-                    <Text className="text-xs text-ink-400">{order.store_name}{order.points_earned > 0 ? ` · +${order.points_earned} puan` : ''}</Text>
+                    <Text className="text-xs text-ink-400">
+                      {order.store_name}
+                      {order.points_earned > 0 && order.payment_status === 'paid' && order.status !== 'payment_pending'
+                        ? ` · +${order.points_earned} puan`
+                        : order.points_earned > 0 && order.payment_status !== 'paid'
+                          ? ` · +${order.points_earned} puan (onay bekliyor)`
+                          : ''}
+                    </Text>
                     <Text className={cn('text-sm font-bold', benefit.kind !== 'paid' ? 'text-green-700' : 'text-ex-red')}>
                       {formatOrderTotalDisplay(Number(order.total), formatPrice)}
                     </Text>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, type Store, type Reward, type CampaignRow, type NotificationPrefsRow } from '@/lib/supabase';
-import { fetchOrdersByUserId, createOrder as createOrderService } from '@/services/orders';
+import { fetchOrdersByUserId, createOrder as createOrderService, type CreateOrderItem } from '@/services/orders';
 import {
   fetchByUserId,
   fetchPrefs,
@@ -143,11 +143,11 @@ export function useQrScans() {
 }
 
 export function useCreateOrder() {
-  const { user, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const inFlightRef = useRef(false);
 
   return useCallback(async (params: {
-    items: { name: string; qty: number; price: number; productId?: string }[];
+    items: CreateOrderItem[];
     total: number;
     storeId?: string;
     storeName: string;
@@ -168,6 +168,7 @@ export function useCreateOrder() {
         qty: it.qty,
         price: it.price,
         productId: it.productId ?? null,
+        ...(it.sizeModifier != null ? { sizeModifier: it.sizeModifier } : {}),
       })),
       total: params.total,
       storeId: params.storeId ?? null,
@@ -181,7 +182,6 @@ export function useCreateOrder() {
 
     if (result.error) return { error: result.error };
 
-    await refreshProfile();
     return {
       error: null,
       orderNumber: result.orderNumber,
@@ -195,7 +195,7 @@ export function useCreateOrder() {
     } finally {
       inFlightRef.current = false;
     }
-  }, [user, refreshProfile]);
+  }, [user]);
 }
 
 export function useRedeemReward() {

@@ -1,4 +1,9 @@
 import { supabase, type Product } from '@/lib/supabase';
+import { resolveProductImageUrl } from '@shared/constants/products';
+
+function withResolvedImages(products: Product[]): Product[] {
+  return products.map(p => ({ ...p, image: resolveProductImageUrl(p.image) }));
+}
 
 /**
  * Retail menu catalog (`products` table). Independent from B2B `b2b_products`.
@@ -12,7 +17,7 @@ export async function fetchActiveProducts(): Promise<{ data: Product[] | null; e
     .eq('in_stock', true)
     .order('sort_order', { ascending: true });
   if (error) return { data: null, error: error.message };
-  return { data: data as Product[], error: null };
+  return { data: withResolvedImages(data as Product[]), error: null };
 }
 
 export async function fetchAllProducts(): Promise<{ data: Product[] | null; error: string | null }> {
@@ -21,7 +26,7 @@ export async function fetchAllProducts(): Promise<{ data: Product[] | null; erro
     .select('*')
     .order('sort_order');
   if (error) return { data: null, error: error.message };
-  return { data: data as Product[], error: null };
+  return { data: withResolvedImages(data as Product[]), error: null };
 }
 
 export async function createProduct(p: Partial<Product>): Promise<{ error: string | null }> {

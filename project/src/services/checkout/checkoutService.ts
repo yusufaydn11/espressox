@@ -2,6 +2,12 @@ import { supabase } from '@/lib/supabase';
 import type { CreateOrderItem } from '@/services/orders/orderService';
 import { buildRetailPaymentInitiateUrl } from '@shared/utils/retailPayments';
 
+function nullIfEmpty(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 export type PaymentCardInput = {
   cardHolderName: string;
   cardNumber: string;
@@ -62,15 +68,16 @@ export async function previewCheckout(params: {
 }): Promise<{ preview: CheckoutPreview | null; error: string | null }> {
   const { data, error } = await supabase.rpc('preview_checkout', {
     p_items: params.items.map(it => ({
-      productId: it.productId ?? null,
+      productId: nullIfEmpty(it.productId ?? null),
       name: it.name,
       qty: it.qty,
       price: it.price,
+      ...(it.sizeModifier != null ? { sizeModifier: it.sizeModifier } : {}),
     })),
-    p_store_id: params.storeId ?? null,
-    p_coupon_code: params.couponCode ?? null,
-    p_benefit_type: params.benefitType ?? null,
-    p_benefit_id: params.benefitId ?? null,
+    p_store_id: nullIfEmpty(params.storeId ?? null),
+    p_coupon_code: nullIfEmpty(params.couponCode ?? null),
+    p_benefit_type: nullIfEmpty(params.benefitType ?? null),
+    p_benefit_id: nullIfEmpty(params.benefitId ?? null),
   });
   if (error) return { preview: null, error: error.message };
   const r = data as Record<string, unknown>;

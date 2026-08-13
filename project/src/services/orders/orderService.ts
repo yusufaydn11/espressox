@@ -9,6 +9,7 @@ export type CreateOrderItem = {
   qty: number;
   price: number;
   productId?: string | null;
+  sizeModifier?: number;
 };
 
 export type CreateOrderParams = {
@@ -22,6 +23,12 @@ export type CreateOrderParams = {
   benefitType?: string | null;
   benefitId?: string | null;
 };
+
+function nullIfEmpty(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
 
 export type CreateOrderResult = {
   error: string | null;
@@ -60,25 +67,56 @@ export async function fetchOrderByNumber(
   return { data: data as OrderWithItems | null, error: null };
 }
 
+export type OrderPointsSyncRow = Pick<
+  OrderRow,
+  'order_number' | 'status' | 'payment_status' | 'points_earned' | 'points_credited' | 'store_name' | 'updated_at'
+>;
+
+export async function fetchRecentOrdersForPointsSync(
+  userId: string,
+  sinceHours = 48,
+): Promise<{ data: OrderPointsSyncRow[] | null; error: string | null }> {
+  const since = new Date(Date.now() - sinceHours * 3_600_000).toISOString();
+  const { data, error } = await supabase
+    .from('orders')
+    .select('order_number, status, payment_status, points_earned, points_credited, store_name, updated_at')
+    .eq('user_id', userId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) return { data: null, error: error.message };
+  return { data: data as OrderPointsSyncRow[], error: null };
+}
+
 export async function createOrder(params: CreateOrderParams): Promise<CreateOrderResult> {
+  const items = params.items.map(it => ({
+    productId: nullIfEmpty(it.productId ?? null),
+    name: String(it.name ?? ''),
+    qty: Math.max(1, Math.floor(Number(it.qty) || 1)),
+    price: Number(it.price),
+    ...(it.sizeModifier != null ? { sizeModifier: Number(it.sizeModifier) } : {}),
+  })).filter(it => it.productId && Number.isFinite(it.price) && it.price > 0);
+
+  if (items.length === 0) {
+    return { error: 'empty_cart' };
+  }
+
   const { data, error } = await supabase.rpc('create_order', {
-    p_items: params.items.map(it => ({
-      productId: it.productId ?? null,
-      name: it.name,
-      qty: it.qty,
-      price: it.price,
-    })),
-    p_total: params.total,
-    p_store_id: params.storeId ?? null,
-    p_store_name: params.storeName,
+    p_items: items,
+    p_total: Number(params.total) || 0,
+    p_store_id: nullIfEmpty(params.storeId ?? null),
+    p_store_name: String(params.storeName ?? ''),
     p_order_type: params.orderType,
     p_payment_method: params.paymentMethod ?? 'cash',
-    p_coupon_code: params.couponCode ?? null,
-    p_benefit_type: params.benefitType ?? null,
-    p_benefit_id: params.benefitId ?? null,
+    p_coupon_code: nullIfEmpty(params.couponCode ?? null),
+    p_benefit_type: nullIfEmpty(params.benefitType ?? null),
+    p_benefit_id: nullIfEmpty(params.benefitId ?? null),
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    const detail = [error.message, error.details, error.hint].filter(Boolean).join(' — ');
+    return { error: detail || 'order_failed' };
+  }
   const result = data as {
     error: string | null;
     order_number: string;
@@ -91,7 +129,10 @@ export async function createOrder(params: CreateOrderParams): Promise<CreateOrde
     payment_status?: string;
     status?: string;
   };
-  if (result.error) return { error: result.error };
+  if (result.error) {
+    const detail = (result as { detail?: string }).detail;
+    return { error: detail ? `${result.error}: ${detail}` : String(result.error) };
+  }
 
   return {
     error: null,

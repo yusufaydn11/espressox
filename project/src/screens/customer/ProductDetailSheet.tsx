@@ -45,9 +45,7 @@ export function ProductDetailSheet() {
 
   const handleAdd = () => {
     if (!canAdd || !size || !milk || !temp) return;
-    for (let i = 0; i < qty; i++) {
-      addToCart(p, { size, milk, syrup, topping, temperature: temp, iceLevel: iceLevel ?? 'Buz Yok', extraEspresso, notes });
-    }
+    addToCart(p, { size, milk, syrup, topping, temperature: temp, iceLevel: iceLevel ?? 'Buz Yok', extraEspresso, notes }, qty);
     closeSheet();
   };
 

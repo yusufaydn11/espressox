@@ -61,9 +61,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
-  const loadGenRef = useRef(0);
+  const bootstrapGenRef = useRef(0);
+  const profileLoadGenRef = useRef(0);
+  const roleLoadGenRef = useRef(0);
   const deletingRef = useRef(false);
   const bootstrapAttemptRef = useRef(0);
+
+  const invalidateUserLoads = useCallback(() => {
+    bootstrapGenRef.current += 1;
+    profileLoadGenRef.current += 1;
+    roleLoadGenRef.current += 1;
+  }, []);
 
   const applyRecoveryFromUrl = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -84,35 +92,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadProfile = useCallback(async (uid: string) => {
-    const gen = ++loadGenRef.current;
+    const gen = ++profileLoadGenRef.current;
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', uid)
       .maybeSingle();
-    if (gen !== loadGenRef.current) return;
+    if (gen !== profileLoadGenRef.current) return;
     if (error) return;
     setProfile(data as Profile);
   }, []);
 
   const loadRole = useCallback(async (uid: string) => {
-    const gen = ++loadGenRef.current;
+    const gen = ++roleLoadGenRef.current;
     const { data, error } = await supabase
       .from('user_roles')
       .select('*')
       .eq('user_id', uid)
       .maybeSingle();
-    if (gen !== loadGenRef.current) return;
+    if (gen !== roleLoadGenRef.current) return;
     if (error) return;
     setUserRole(data as UserRole);
   }, []);
 
   const bootstrapUserData = useCallback(async (uid: string) => {
-    await withTimeout(
-      Promise.all([loadProfile(uid), loadRole(uid)]),
+    const gen = ++bootstrapGenRef.current;
+    const [profileRes, roleRes] = await withTimeout(
+      Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', uid).maybeSingle(),
+        supabase.from('user_roles').select('*').eq('user_id', uid).maybeSingle(),
+      ]),
       AUTH_BOOTSTRAP_TIMEOUT_MS,
     );
-  }, [loadProfile, loadRole]);
+    if (gen !== bootstrapGenRef.current) return;
+    if (!profileRes.error && profileRes.data) setProfile(profileRes.data as Profile);
+    if (!roleRes.error && roleRes.data) setUserRole(roleRes.data as UserRole);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -158,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (mounted) setLoading(false);
         })();
       } else {
-        loadGenRef.current += 1;
+        invalidateUserLoads();
         setProfile(null);
         setUserRole(null);
         setFranchiseIdState(null);
@@ -171,7 +186,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [bootstrapUserData, applyRecoveryFromUrl]);
+  }, [bootstrapUserData, applyRecoveryFromUrl, invalidateUserLoads]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`profile-points-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as Profile;
+          setProfile(prev => (prev ? { ...prev, ...row } : row));
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const retryBootstrap = useCallback(() => {
     bootstrapAttemptRef.current += 1;
@@ -276,13 +314,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         /* best-effort */
       }
     }
-    loadGenRef.current += 1;
+    invalidateUserLoads();
     await supabase.auth.signOut();
     setProfile(null);
     setUserRole(null);
     setUser(null);
     setSession(null);
-  }, [user]);
+  }, [user, invalidateUserLoads]);
 
   const resetPassword = useCallback(async (email: string) => {
     const redirectTo = getPasswordResetRedirectUrl();
@@ -342,7 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: translateError(body.error ?? 'Hesap silinemedi') };
       }
 
-      loadGenRef.current += 1;
+      invalidateUserLoads();
       await supabase.auth.signOut();
       setProfile(null);
       setUserRole(null);
@@ -354,7 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       deletingRef.current = false;
     }
-  }, [user, session]);
+  }, [user, session, invalidateUserLoads]);
 
   const role = userRole?.role ?? 'customer';
   const isAdmin = role === 'admin' || role === 'super_admin';
